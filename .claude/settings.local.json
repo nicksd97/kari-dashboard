@@ -9,7 +9,9 @@
       "Bash(git branch:*)",
       "Bash(git push:*)",
       "Bash(curl -s http://localhost:3000)",
-      "Bash(taskkill //F //IM node.exe)"
+      "Bash(taskkill //F //IM node.exe)",
+      "WebFetch(domain:localhost)",
+      "Bash(node:*)"
     ]
   }
 }
