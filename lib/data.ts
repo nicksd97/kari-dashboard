@@ -159,3 +159,12 @@ export async function fetchChecklistEntries(): Promise<ChecklistEntry[]> {
     return DEMO_CHECKLIST_ENTRIES;
   }
 }
+
+export function getDemoData() {
+  return {
+    projects: DEMO_PROJECTS,
+    leads: DEMO_LEADS,
+    checkins: DEMO_CHECKINS,
+    checklistEntries: DEMO_CHECKLIST_ENTRIES,
+  };
+}
