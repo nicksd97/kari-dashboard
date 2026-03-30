@@ -168,3 +168,119 @@ export function getDemoData() {
     checklistEntries: DEMO_CHECKLIST_ENTRIES,
   };
 }
+
+// Live-only fetchers: return empty arrays on failure (no demo fallback)
+
+export async function fetchLiveProjects(): Promise<Project[]> {
+  try {
+    const { data, error } = await supabase
+      .from("projects")
+      .select("*")
+      .eq("company_id", COMPANY_ID);
+
+    if (error || !data) return [];
+
+    return await Promise.all(
+      data.map(async (p: Record<string, unknown>) => {
+        const { data: checklists } = await supabase
+          .from("checklists")
+          .select("*")
+          .eq("project_id", p.id);
+
+        return {
+          project_number: String(p.project_number || ""),
+          name: String(p.name || ""),
+          status: String(p.status || ""),
+          customer_name: p.customer_name ? String(p.customer_name) : undefined,
+          start_date: p.start_date ? String(p.start_date) : undefined,
+          estimated_end_date: p.estimated_end_date ? String(p.estimated_end_date) : undefined,
+          agreed_price: p.agreed_price ? Number(p.agreed_price) : undefined,
+          assigned: p.assigned ? String(p.assigned) : undefined,
+          dependency: p.dependency ? String(p.dependency) : undefined,
+          checklists: checklists?.map((c: Record<string, unknown>) => ({
+            name: String(c.name || ""),
+            done: Number(c.done || 0),
+            total: Number(c.total || 0),
+            date: c.date ? String(c.date) : undefined,
+          })),
+        } as Project;
+      })
+    );
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchLiveLeads(): Promise<Lead[]> {
+  try {
+    const { data, error } = await supabase
+      .from("leads")
+      .select("*")
+      .eq("company_id", COMPANY_ID);
+
+    if (error || !data) return [];
+
+    return data.map((l: Record<string, unknown>) => ({
+      name: String(l.name || ""),
+      email: String(l.email || ""),
+      phone: String(l.phone || ""),
+      source: String(l.source || "other"),
+      status: String(l.status || "new"),
+      created_at: String(l.created_at || ""),
+      followup_due_at: l.followup_due_at ? String(l.followup_due_at) : undefined,
+      address: String(l.address || ""),
+    })) as Lead[];
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchLiveCheckins(): Promise<Checkin[]> {
+  try {
+    const today = new Date().toISOString().split("T")[0];
+    const { data, error } = await supabase
+      .from("checkins")
+      .select("*")
+      .eq("company_id", COMPANY_ID)
+      .eq("date", today);
+
+    if (error || !data) return [];
+
+    return data.map((c: Record<string, unknown>) => ({
+      employee: String(c.employee || ""),
+      status: c.responded_at ? "checked_in" as const : "waiting" as const,
+      summary: c.summary ? String(c.summary) : undefined,
+      time: c.responded_at
+        ? new Date(String(c.responded_at)).toLocaleTimeString("nb-NO", { hour: "2-digit", minute: "2-digit" })
+        : undefined,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchLiveChecklistEntries(): Promise<ChecklistEntry[]> {
+  try {
+    const { data, error } = await supabase
+      .from("checklist_submissions")
+      .select("*")
+      .eq("company_id", COMPANY_ID)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (error || !data) return [];
+
+    return data.map((c: Record<string, unknown>) => ({
+      template: String(c.template || ""),
+      project_number: String(c.project_number || ""),
+      project_name: String(c.project_name || ""),
+      status: (c.completed_at ? "completed" : "pending") as "completed" | "pending",
+      done: c.done != null ? Number(c.done) : undefined,
+      total: c.total != null ? Number(c.total) : undefined,
+      sent_at: String(c.created_at || ""),
+      completed_at: c.completed_at ? String(c.completed_at) : undefined,
+    }));
+  } catch {
+    return [];
+  }
+}

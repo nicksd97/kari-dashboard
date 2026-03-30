@@ -3,10 +3,10 @@
 import { useEffect, useState, useCallback } from "react";
 import type { Project, Lead, Checkin, ChecklistEntry } from "@/lib/types";
 import {
-  fetchProjects,
-  fetchLeads,
-  fetchCheckins,
-  fetchChecklistEntries,
+  fetchLiveProjects,
+  fetchLiveLeads,
+  fetchLiveCheckins,
+  fetchLiveChecklistEntries,
   getDemoData,
 } from "@/lib/data";
 import StatCards from "./StatCards";
@@ -23,25 +23,22 @@ export default function Dashboard() {
   const [checkins, setCheckins] = useState<Checkin[]>([]);
   const [checklistEntries, setChecklistEntries] = useState<ChecklistEntry[]>([]);
   const [source, setSource] = useState<Source>("live");
-  const [liveAvailable, setLiveAvailable] = useState(false);
   const [tab, setTab] = useState<Tab>("timeline");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadLive = useCallback(async () => {
-    const [projResult, leadResult, checkinResult, clResult] = await Promise.all([
-      fetchProjects(),
-      fetchLeads(),
-      fetchCheckins(),
-      fetchChecklistEntries(),
+    const [liveProjects, liveLeads, liveCheckins, liveCl] = await Promise.all([
+      fetchLiveProjects(),
+      fetchLiveLeads(),
+      fetchLiveCheckins(),
+      fetchLiveChecklistEntries(),
     ]);
-    const hasLive = projResult.isLive || leadResult.isLive;
-    setLiveAvailable(hasLive);
-    setProjects(projResult.projects);
-    setLeads(leadResult.leads);
-    setCheckins(checkinResult);
-    setChecklistEntries(clResult);
-    return hasLive;
+    setProjects(liveProjects);
+    setLeads(liveLeads);
+    setCheckins(liveCheckins);
+    setChecklistEntries(liveCl);
+    return liveProjects.length > 0 || liveLeads.length > 0;
   }, []);
 
   const loadDemo = useCallback(() => {
@@ -52,15 +49,18 @@ export default function Dashboard() {
     setChecklistEntries(demo.checklistEntries);
   }, []);
 
-  // Initial load: try live, fall back to demo
+  // Initial load: try live first, if empty fall back to demo
   useEffect(() => {
     async function init() {
       const hasLive = await loadLive();
-      if (!hasLive) setSource("demo");
+      if (!hasLive) {
+        setSource("demo");
+        loadDemo();
+      }
       setLoading(false);
     }
     init();
-  }, [loadLive]);
+  }, [loadLive, loadDemo]);
 
   const handleToggle = useCallback(async () => {
     if (source === "live") {
@@ -143,7 +143,6 @@ export default function Dashboard() {
                   {isLive ? "Live data" : "Demo data"}
                 </button>
 
-                {/* Refresh button (only in live mode) */}
                 {isLive && (
                   <button
                     onClick={handleRefresh}
@@ -165,13 +164,6 @@ export default function Dashboard() {
                       />
                     </svg>
                   </button>
-                )}
-
-                {/* Hint when live has no data */}
-                {isLive && !liveAvailable && (
-                  <span className="text-[10px]" style={{ color: "var(--muted-light)" }}>
-                    (tom)
-                  </span>
                 )}
               </div>
             </div>

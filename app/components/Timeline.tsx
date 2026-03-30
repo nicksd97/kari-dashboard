@@ -232,6 +232,32 @@ export default function Timeline({ projects }: TimelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Empty state
+  if (projects.length === 0) {
+    return (
+      <div
+        className="flex flex-col items-center justify-center rounded-xl"
+        style={{
+          border: "1px solid var(--card-border)",
+          backgroundColor: "var(--card-bg)",
+          minHeight: 400,
+        }}
+      >
+        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" style={{ color: "var(--muted-light)", opacity: 0.5 }}>
+          <rect x="4" y="12" width="40" height="4" rx="2" fill="currentColor" />
+          <rect x="4" y="22" width="28" height="4" rx="2" fill="currentColor" />
+          <rect x="4" y="32" width="34" height="4" rx="2" fill="currentColor" />
+        </svg>
+        <p className="mt-4 text-[15px] font-semibold" style={{ color: "var(--foreground)" }}>
+          Ingen prosjekter enn&aring;
+        </p>
+        <p className="mt-1 text-[13px]" style={{ color: "var(--muted-light)" }}>
+          Prosjekter vil vises her n&aring;r Kari oppretter dem
+        </p>
+      </div>
+    );
+  }
+
   const datedProjects = projects.filter((p) => p.start_date && p.estimated_end_date);
   const today = new Date().toISOString().split("T")[0];
 
