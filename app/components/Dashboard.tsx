@@ -28,17 +28,29 @@ export default function Dashboard() {
   const [refreshing, setRefreshing] = useState(false);
 
   const loadLive = useCallback(async () => {
-    const [liveProjects, liveLeads, liveCheckins, liveCl] = await Promise.all([
-      fetchLiveProjects(),
-      fetchLiveLeads(),
-      fetchLiveCheckins(),
-      fetchLiveChecklistEntries(),
-    ]);
-    setProjects(liveProjects);
-    setLeads(liveLeads);
-    setCheckins(liveCheckins);
-    setChecklistEntries(liveCl);
-    return liveProjects.length > 0 || liveLeads.length > 0;
+    try {
+      const [liveProjects, liveLeads, liveCheckins, liveCl] = await Promise.all([
+        fetchLiveProjects().catch(() => []),
+        fetchLiveLeads().catch(() => []),
+        fetchLiveCheckins().catch(() => []),
+        fetchLiveChecklistEntries().catch(() => []),
+      ]);
+      const p = Array.isArray(liveProjects) ? liveProjects : [];
+      const l = Array.isArray(liveLeads) ? liveLeads : [];
+      const ci = Array.isArray(liveCheckins) ? liveCheckins : [];
+      const cl = Array.isArray(liveCl) ? liveCl : [];
+      setProjects(p);
+      setLeads(l);
+      setCheckins(ci);
+      setChecklistEntries(cl);
+      return p.length > 0 || l.length > 0;
+    } catch {
+      setProjects([]);
+      setLeads([]);
+      setCheckins([]);
+      setChecklistEntries([]);
+      return false;
+    }
   }, []);
 
   const loadDemo = useCallback(() => {
@@ -81,13 +93,18 @@ export default function Dashboard() {
     setRefreshing(false);
   }, [source, loadLive]);
 
-  const now = new Date().toLocaleString("nb-NO", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const [now, setNow] = useState("");
+  useEffect(() => {
+    setNow(
+      new Date().toLocaleString("nb-NO", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    );
+  }, [loading, refreshing]);
 
   if (loading) {
     return (

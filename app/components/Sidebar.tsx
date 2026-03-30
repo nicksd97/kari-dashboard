@@ -11,11 +11,13 @@ interface SidebarProps {
 const EMPLOYEES_ORDER = ["Roar", "Andrii", "Marci"];
 
 function timeAgo(dateStr: string): string {
+  if (!dateStr) return "";
   const now = new Date();
   const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "";
   const diffMs = now.getTime() - d.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  if (diffDays === 0) return "i dag";
+  if (diffDays <= 0) return "i dag";
   if (diffDays === 1) return "1 dag siden";
   return `${diffDays} dager siden`;
 }

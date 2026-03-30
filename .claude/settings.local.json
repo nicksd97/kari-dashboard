@@ -7,7 +7,9 @@
       "Bash(git commit:*)",
       "Bash(gh repo:*)",
       "Bash(git branch:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(curl -s http://localhost:3000)",
+      "Bash(taskkill //F //IM node.exe)"
     ]
   }
 }
