@@ -312,28 +312,25 @@ export default function Timeline({ projects }: TimelineProps) {
 
   const totalHeight = Math.max(500, y + 20);
 
-  // Hover handlers
+  // Hover handlers — popup uses position:fixed so we track viewport coords
   const POPUP_HEIGHT_EST = 420;
+  const POPUP_WIDTH = 380;
 
   const handleBarMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const scrollLeft = containerRef.current.scrollLeft;
-    const scrollTop = containerRef.current.scrollTop;
+    let px = e.clientX + 16;
+    let py = e.clientY + 8;
 
-    const cursorXInContainer = e.clientX - rect.left + scrollLeft;
-    const cursorYInContainer = e.clientY - rect.top + scrollTop;
+    // Flip above if not enough space below
+    if (window.innerHeight - e.clientY < POPUP_HEIGHT_EST + 20) {
+      py = e.clientY - POPUP_HEIGHT_EST - 10;
+    }
 
-    // Check if popup would go below the viewport
-    const spaceBelow = window.innerHeight - e.clientY;
-    const flipAbove = spaceBelow < POPUP_HEIGHT_EST + 20;
+    // Shift left if would go off right edge
+    if (px + POPUP_WIDTH > window.innerWidth - 16) {
+      px = e.clientX - POPUP_WIDTH - 16;
+    }
 
-    setPopupPos({
-      x: cursorXInContainer + 20,
-      y: flipAbove
-        ? cursorYInContainer - POPUP_HEIGHT_EST - 10
-        : cursorYInContainer - 12,
-    });
+    setPopupPos({ x: px, y: py });
   }, []);
 
   const handleBarEnter = useCallback((pn: string, e: React.MouseEvent) => {
@@ -385,8 +382,6 @@ export default function Timeline({ projects }: TimelineProps) {
         border: "1px solid var(--card-border)",
         backgroundColor: "var(--card-bg)",
         minHeight: 500,
-        overflowX: "auto",
-        overflowY: "visible",
       }}
     >
       <div className="relative" style={{ minWidth: fullWidth, height: totalHeight + MONTH_BAR }}>
@@ -654,18 +649,19 @@ export default function Timeline({ projects }: TimelineProps) {
           })}
         </svg>
 
-        {/* ── Hover popup ── */}
-        {hoveredData && (
-          <HoverPopup
-            project={hoveredData}
-            x={popupPos.x}
-            y={popupPos.y}
-            projects={projects}
-            onMouseEnter={handlePopupEnter}
-            onMouseLeave={handlePopupLeave}
-          />
-        )}
       </div>
+
+      {/* ── Hover popup (fixed positioning, outside scroll container) ── */}
+      {hoveredData && (
+        <HoverPopup
+          project={hoveredData}
+          x={popupPos.x}
+          y={popupPos.y}
+          projects={projects}
+          onMouseEnter={handlePopupEnter}
+          onMouseLeave={handlePopupLeave}
+        />
+      )}
     </div>
   );
 }
@@ -703,11 +699,13 @@ function HoverPopup({
 
   return (
     <div
-      className="popup-enter absolute z-50"
+      className="popup-enter"
       style={{
+        position: "fixed",
         left: x,
         top: y,
         width: 380,
+        zIndex: 9999,
         backgroundColor: "var(--card-bg)",
         borderRadius: 12,
         boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
