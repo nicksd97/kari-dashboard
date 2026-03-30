@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import type { Project, Lead } from "./types";
+import type { Project, Lead, Checkin, ChecklistEntry } from "./types";
 
 const COMPANY_ID = "a12dfbf0-a9d6-4786-95fe-6f1678d9d980";
 
@@ -94,5 +94,68 @@ export async function fetchLeads(): Promise<{ leads: Lead[]; isLive: boolean }> 
     return { leads: mapped, isLive: true };
   } catch {
     return { leads: DEMO_LEADS, isLive: false };
+  }
+}
+
+const DEMO_CHECKINS: Checkin[] = [
+  { employee: "Roar", status: "checked_in", summary: "Vika Hustad - Isolasjon", time: "07:14" },
+  { employee: "Andrii", status: "checked_in", summary: "Stavnevegen 31", time: "06:45" },
+  { employee: "Marci", status: "waiting" },
+];
+
+const DEMO_CHECKLIST_ENTRIES: ChecklistEntry[] = [
+  { template: "Vernerunde", project_number: "802", project_name: "Vika Hustad", status: "pending", sent_at: "2026-03-30" },
+  { template: "Ferdigstillelse", project_number: "815", project_name: "Jan Erik Peis", status: "completed", done: 4, total: 12, sent_at: "2026-03-29", completed_at: "2026-03-30" },
+  { template: "Vernerunde", project_number: "767", project_name: "Stavnevegen 31", status: "completed", done: 7, total: 10, sent_at: "2026-03-29", completed_at: "2026-03-30" },
+  { template: "Kvalitetskontroll Kjøkken", project_number: "767", project_name: "Stavnevegen 31", status: "completed", done: 6, total: 10, sent_at: "2026-03-28", completed_at: "2026-03-30" },
+];
+
+export async function fetchCheckins(): Promise<Checkin[]> {
+  try {
+    const today = new Date().toISOString().split("T")[0];
+    const { data, error } = await supabase
+      .from("checkins")
+      .select("*")
+      .eq("company_id", COMPANY_ID)
+      .eq("date", today);
+
+    if (error || !data || data.length === 0) return DEMO_CHECKINS;
+
+    return data.map((c: Record<string, unknown>) => ({
+      employee: String(c.employee || ""),
+      status: c.responded_at ? "checked_in" as const : "waiting" as const,
+      summary: c.summary ? String(c.summary) : undefined,
+      time: c.responded_at
+        ? new Date(String(c.responded_at)).toLocaleTimeString("nb-NO", { hour: "2-digit", minute: "2-digit" })
+        : undefined,
+    }));
+  } catch {
+    return DEMO_CHECKINS;
+  }
+}
+
+export async function fetchChecklistEntries(): Promise<ChecklistEntry[]> {
+  try {
+    const { data, error } = await supabase
+      .from("checklist_submissions")
+      .select("*")
+      .eq("company_id", COMPANY_ID)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (error || !data || data.length === 0) return DEMO_CHECKLIST_ENTRIES;
+
+    return data.map((c: Record<string, unknown>) => ({
+      template: String(c.template || ""),
+      project_number: String(c.project_number || ""),
+      project_name: String(c.project_name || ""),
+      status: (c.completed_at ? "completed" : "pending") as "completed" | "pending",
+      done: c.done != null ? Number(c.done) : undefined,
+      total: c.total != null ? Number(c.total) : undefined,
+      sent_at: String(c.created_at || ""),
+      completed_at: c.completed_at ? String(c.completed_at) : undefined,
+    }));
+  } catch {
+    return DEMO_CHECKLIST_ENTRIES;
   }
 }

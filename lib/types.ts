@@ -18,6 +18,25 @@ export interface Project {
   checklists?: Checklist[];
 }
 
+export interface Checkin {
+  employee: string;
+  status: "checked_in" | "waiting" | "off";
+  summary?: string;
+  time?: string;
+  label?: string;
+}
+
+export interface ChecklistEntry {
+  template: string;
+  project_number: string;
+  project_name: string;
+  status: "overdue" | "pending" | "completed";
+  done?: number;
+  total?: number;
+  sent_at: string;
+  completed_at?: string;
+}
+
 export interface Lead {
   name: string;
   email: string;
