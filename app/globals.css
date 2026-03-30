@@ -16,6 +16,7 @@
   --surface: #f9fafb;
   --surface-hover: #f3f4f6;
   --divider: #e5e7eb;
+  --row-alt: #fafafa;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -29,6 +30,7 @@
     --surface: #1a1a24;
     --surface-hover: #22222e;
     --divider: #2a2a36;
+    --row-alt: #1a1a24;
   }
 }
 
@@ -38,7 +40,6 @@ body {
   font-family: "DM Sans", sans-serif;
 }
 
-/* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 5px;
   height: 5px;
@@ -66,7 +67,6 @@ body {
   }
 }
 
-/* Forfalt pulse animation */
 @keyframes pulse-badge {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }
@@ -76,11 +76,10 @@ body {
   animation: pulse-badge 2s ease-in-out infinite;
 }
 
-/* Popup enter animation */
 @keyframes popup-enter {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
@@ -89,28 +88,5 @@ body {
 }
 
 .popup-enter {
-  animation: popup-enter 0.15s ease-out;
-}
-
-/* Completed project hatching */
-.bar-completed {
-  background-image: repeating-linear-gradient(
-    -45deg,
-    transparent,
-    transparent 4px,
-    rgba(0,0,0,0.07) 4px,
-    rgba(0,0,0,0.07) 8px
-  );
-}
-
-@media (prefers-color-scheme: dark) {
-  .bar-completed {
-    background-image: repeating-linear-gradient(
-      -45deg,
-      transparent,
-      transparent 4px,
-      rgba(255,255,255,0.08) 4px,
-      rgba(255,255,255,0.08) 8px
-    );
-  }
+  animation: popup-enter 0.12s ease-out;
 }
