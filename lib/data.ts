@@ -117,7 +117,7 @@ export async function fetchCheckins(): Promise<Checkin[]> {
       .from("checkins")
       .select("*")
       .eq("company_id", COMPANY_ID)
-      .eq("date", today);
+      .eq("checkin_date", today);
 
     if (error || !data || data.length === 0) return DEMO_CHECKINS;
 
@@ -137,7 +137,7 @@ export async function fetchCheckins(): Promise<Checkin[]> {
 export async function fetchChecklistEntries(): Promise<ChecklistEntry[]> {
   try {
     const { data, error } = await supabase
-      .from("checklist_submissions")
+      .from("checklists")
       .select("*")
       .eq("company_id", COMPANY_ID)
       .order("created_at", { ascending: false })
@@ -242,7 +242,7 @@ export async function fetchLiveCheckins(): Promise<Checkin[]> {
       .from("checkins")
       .select("*")
       .eq("company_id", COMPANY_ID)
-      .eq("date", today);
+      .eq("checkin_date", today);
 
     if (error || !data) return [];
 
@@ -262,7 +262,7 @@ export async function fetchLiveCheckins(): Promise<Checkin[]> {
 export async function fetchLiveChecklistEntries(): Promise<ChecklistEntry[]> {
   try {
     const { data, error } = await supabase
-      .from("checklist_submissions")
+      .from("checklists")
       .select("*")
       .eq("company_id", COMPANY_ID)
       .order("created_at", { ascending: false })
