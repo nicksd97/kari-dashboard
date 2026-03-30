@@ -313,12 +313,26 @@ export default function Timeline({ projects }: TimelineProps) {
   const totalHeight = Math.max(500, y + 20);
 
   // Hover handlers
+  const POPUP_HEIGHT_EST = 420;
+
   const handleBarMouseMove = useCallback((e: React.MouseEvent) => {
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
+    const scrollLeft = containerRef.current.scrollLeft;
+    const scrollTop = containerRef.current.scrollTop;
+
+    const cursorXInContainer = e.clientX - rect.left + scrollLeft;
+    const cursorYInContainer = e.clientY - rect.top + scrollTop;
+
+    // Check if popup would go below the viewport
+    const spaceBelow = window.innerHeight - e.clientY;
+    const flipAbove = spaceBelow < POPUP_HEIGHT_EST + 20;
+
     setPopupPos({
-      x: e.clientX - rect.left + containerRef.current.scrollLeft + 20,
-      y: e.clientY - rect.top + containerRef.current.scrollTop - 12,
+      x: cursorXInContainer + 20,
+      y: flipAbove
+        ? cursorYInContainer - POPUP_HEIGHT_EST - 10
+        : cursorYInContainer - 12,
     });
   }, []);
 
@@ -366,11 +380,13 @@ export default function Timeline({ projects }: TimelineProps) {
   return (
     <div
       ref={containerRef}
-      className="relative overflow-x-auto rounded-xl"
+      className="relative rounded-xl"
       style={{
         border: "1px solid var(--card-border)",
         backgroundColor: "var(--card-bg)",
         minHeight: 500,
+        overflowX: "auto",
+        overflowY: "visible",
       }}
     >
       <div className="relative" style={{ minWidth: fullWidth, height: totalHeight + MONTH_BAR }}>
