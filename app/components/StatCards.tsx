@@ -7,7 +7,9 @@ interface StatCardsProps {
   leads: Lead[];
 }
 
-export default function StatCards({ projects, leads }: StatCardsProps) {
+export default function StatCards({ projects: rawProjects, leads: rawLeads }: StatCardsProps) {
+  const projects = rawProjects || [];
+  const leads = rawLeads || [];
   const active = projects.filter((p) => p.status === "pagaende").length;
   const planning = projects.filter((p) =>
     ["planlegging", "innkommende", "materialer"].includes(p.status)

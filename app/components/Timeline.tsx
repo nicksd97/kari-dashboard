@@ -232,8 +232,10 @@ export default function Timeline({ projects }: TimelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const safeProjects = projects || [];
+
   // Empty state
-  if (projects.length === 0) {
+  if (safeProjects.length === 0) {
     return (
       <div
         className="flex flex-col items-center justify-center rounded-xl"
@@ -258,7 +260,7 @@ export default function Timeline({ projects }: TimelineProps) {
     );
   }
 
-  const datedProjects = projects.filter((p) => p.start_date && p.estimated_end_date);
+  const datedProjects = safeProjects.filter((p) => p.start_date && p.estimated_end_date);
   const today = new Date().toISOString().split("T")[0];
 
   const allDates = datedProjects.flatMap((p) => [p.start_date!, p.estimated_end_date!]);
@@ -274,7 +276,7 @@ export default function Timeline({ projects }: TimelineProps) {
 
   const rangeStartStr = rangeStart.toISOString().split("T")[0];
   const rangeEndStr = rangeEnd.toISOString().split("T")[0];
-  const totalDays = daysBetween(rangeStartStr, rangeEndStr);
+  const totalDays = Math.max(1, daysBetween(rangeStartStr, rangeEndStr));
 
   // Returns percentage (0–100) of timeline width
   function dateToPct(date: string) {
@@ -289,7 +291,7 @@ export default function Timeline({ projects }: TimelineProps) {
     const key = p.assigned && EMPLOYEES.includes(p.assigned) ? p.assigned : "Ikke tildelt";
     grouped[key].push(p);
   }
-  const undated = projects.filter((p) => !p.start_date || !p.estimated_end_date);
+  const undated = safeProjects.filter((p) => !p.start_date || !p.estimated_end_date);
 
   // Month labels (only months that overlap with the range)
   const months: { label: string; pct: number }[] = [];
@@ -371,7 +373,7 @@ export default function Timeline({ projects }: TimelineProps) {
   }, []);
 
   const hoveredData = hoveredProject
-    ? projects.find((p) => p.project_number === hoveredProject)
+    ? safeProjects.find((p) => p.project_number === hoveredProject)
     : null;
 
   return (
@@ -651,7 +653,7 @@ export default function Timeline({ projects }: TimelineProps) {
           project={hoveredData}
           x={popupPos.x}
           y={popupPos.y}
-          projects={projects}
+          projects={safeProjects}
           onMouseEnter={handlePopupEnter}
           onMouseLeave={handlePopupLeave}
         />

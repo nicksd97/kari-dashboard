@@ -20,7 +20,9 @@ function timeAgo(dateStr: string): string {
   return `${diffDays} dager siden`;
 }
 
-export default function Sidebar({ checkins, checklistEntries }: SidebarProps) {
+export default function Sidebar({ checkins: rawCheckins, checklistEntries: rawEntries }: SidebarProps) {
+  const checkins = rawCheckins || [];
+  const checklistEntries = rawEntries || [];
   const pending = checklistEntries.filter((c) => c.status !== "completed");
   const completed = checklistEntries.filter((c) => c.status === "completed");
   const checkedInCount = checkins.filter((c) => c.status === "checked_in").length;
