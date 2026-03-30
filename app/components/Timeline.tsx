@@ -278,45 +278,11 @@ export default function Timeline({ projects }: TimelineProps) {
   }
 
   const todayPct = dateToPct(today);
-  const projectByNumber = new Map(projects.map((p) => [p.project_number, p]));
 
-  // --- Swim-lane assignment per employee ---
-  // For each employee group, assign projects to lanes so overlapping bars don't collide.
-  function projectsOverlap(a: Project, b: Project): boolean {
-    if (!a.start_date || !a.estimated_end_date || !b.start_date || !b.estimated_end_date) return false;
-    return a.start_date < b.estimated_end_date && b.start_date < a.estimated_end_date;
-  }
-
-  function assignLanes(group: Project[]): Map<string, number> {
-    const sorted = [...group]
-      .filter((p) => p.start_date && p.estimated_end_date)
-      .sort((a, b) => (a.start_date! < b.start_date! ? -1 : 1));
-    const lanes: Project[][] = [];
-    const assignment = new Map<string, number>();
-
-    for (const p of sorted) {
-      let placed = false;
-      for (let lane = 0; lane < lanes.length; lane++) {
-        const overlaps = lanes[lane].some((existing) => projectsOverlap(existing, p));
-        if (!overlaps) {
-          lanes[lane].push(p);
-          assignment.set(p.project_number, lane);
-          placed = true;
-          break;
-        }
-      }
-      if (!placed) {
-        lanes.push([p]);
-        assignment.set(p.project_number, lanes.length - 1);
-      }
-    }
-    return assignment;
-  }
-
-  // Build layout with lanes
+  // Simple layout: one row per project, stacked under each employee
   let y = 0;
   let groupIdx = 0;
-  const rows: { project: Project; y: number; indexInGroup: number }[] = [];
+  const rows: { project: Project; y: number; rowIndex: number }[] = [];
   const headers: { label: string; color: string; y: number }[] = [];
 
   for (const emp of [...EMPLOYEES, "Ikke tildelt"]) {
@@ -325,31 +291,10 @@ export default function Timeline({ projects }: TimelineProps) {
     if (groupIdx > 0) y += GROUP_GAP;
     headers.push({ label: emp, color: EMPLOYEE_COLORS[emp] || "#999", y });
     y += EMP_HEADER;
-
-    const laneMap = assignLanes(group);
-    const maxLane = group.length > 0 ? Math.max(0, ...Array.from(laneMap.values())) : 0;
-    const totalLanes = maxLane + 1;
-
-    // Place dated projects by their lane
-    const dated = group.filter((p) => p.start_date && p.estimated_end_date);
-    const undatedInGroup = group.filter((p) => !p.start_date || !p.estimated_end_date);
-
-    let rowIdx = 0;
-    for (let lane = 0; lane < totalLanes; lane++) {
-      const inLane = dated.filter((p) => laneMap.get(p.project_number) === lane);
-      for (const p of inLane) {
-        rows.push({ project: p, y: y + lane * ROW_HEIGHT, indexInGroup: rowIdx });
-        rowIdx++;
-      }
-    }
-    y += totalLanes * ROW_HEIGHT;
-
-    // Undated projects get their own rows after lanes
-    for (const p of undatedInGroup) {
-      rows.push({ project: p, y, indexInGroup: rowIdx });
+    group.forEach((p, i) => {
+      rows.push({ project: p, y, rowIndex: i });
       y += ROW_HEIGHT;
-      rowIdx++;
-    }
+    });
     groupIdx++;
   }
 
@@ -358,29 +303,26 @@ export default function Timeline({ projects }: TimelineProps) {
     headers.push({ label: "Uten dato", color: "#999", y });
     y += EMP_HEADER;
     undated.forEach((p, i) => {
-      rows.push({ project: p, y, indexInGroup: i });
+      rows.push({ project: p, y, rowIndex: i });
       y += ROW_HEIGHT;
     });
   }
 
   const totalHeight = Math.max(500, y + 20);
 
-  // Hover handlers — popup uses position:fixed so we track viewport coords
+  // Hover handlers
   const POPUP_HEIGHT_EST = 420;
   const POPUP_WIDTH = 380;
 
   const handleBarMouseMove = useCallback((e: React.MouseEvent) => {
     let px = e.clientX + 16;
     let py = e.clientY + 8;
-
     if (window.innerHeight - e.clientY < POPUP_HEIGHT_EST + 20) {
       py = e.clientY - POPUP_HEIGHT_EST - 10;
     }
-
     if (px + POPUP_WIDTH > window.innerWidth - 16) {
       px = e.clientX - POPUP_WIDTH - 16;
     }
-
     setPopupPos({ x: px, y: py });
   }, []);
 
@@ -405,28 +347,6 @@ export default function Timeline({ projects }: TimelineProps) {
   const hoveredData = hoveredProject
     ? projects.find((p) => p.project_number === hoveredProject)
     : null;
-
-  // Dependency arrows: connect right edge of source bar → left edge of target bar
-  const depArrows: { from: { pct: number; y: number }; to: { pct: number; y: number } }[] = [];
-  for (const row of rows) {
-    if (row.project.dependency) {
-      const dep = projectByNumber.get(row.project.dependency);
-      if (dep?.estimated_end_date && row.project.start_date) {
-        const depRow = rows.find((r) => r.project.project_number === dep.project_number);
-        if (depRow) {
-          depArrows.push({
-            from: { pct: dateToPct(dep.estimated_end_date), y: depRow.y + ROW_HEIGHT / 2 },
-            to: { pct: dateToPct(row.project.start_date), y: row.y + ROW_HEIGHT / 2 },
-          });
-        }
-      }
-    }
-  }
-
-  // The timeline area (right of LEFT_COL) uses percentages.
-  // We use a CSS calc approach: the timeline area = 100% - LEFT_COL.
-  // A bar at dateToPct(x)% starts at `calc(${LEFT_COL}px + ${pct}% * (100% - ${LEFT_COL}px))`
-  // Simplify by using a nested relative container for the timeline area.
 
   return (
     <div
@@ -569,48 +489,55 @@ export default function Timeline({ projects }: TimelineProps) {
           </div>
         ))}
 
-        {/* ── Row backgrounds (alternating by unique y position) ── */}
-        {(() => {
-          const uniqueYs = [...new Set(rows.map((r) => r.y))].sort((a, b) => a - b);
-          return uniqueYs.map((ry, i) => (
-            <div
-              key={`bg-${ry}`}
-              className="absolute"
-              style={{
-                top: MONTH_BAR + ry,
-                left: 0,
-                right: 0,
-                height: ROW_HEIGHT,
-                backgroundColor: i % 2 === 1 ? "var(--row-alt)" : "var(--card-bg)",
-              }}
-            />
-          ));
-        })()}
+        {/* ── Row backgrounds (alternating) ── */}
+        {rows.map((row) => (
+          <div
+            key={`bg-${row.project.project_number}`}
+            className="absolute"
+            style={{
+              top: MONTH_BAR + row.y,
+              left: 0,
+              right: 0,
+              height: ROW_HEIGHT,
+              backgroundColor: row.rowIndex % 2 === 1 ? "var(--row-alt)" : "var(--card-bg)",
+            }}
+          />
+        ))}
 
         {/* ── Project rows ── */}
         {rows.map((row) => {
           const p = row.project;
 
+          // Undated: show name + status badge only, no bar
           if (!p.start_date || !p.estimated_end_date) {
             return (
               <div
                 key={p.project_number}
-                className="absolute flex items-center px-4"
-                style={{ top: MONTH_BAR + row.y, left: 0, height: ROW_HEIGHT }}
+                className="absolute flex items-center"
+                style={{ top: MONTH_BAR + row.y, left: 0, right: 0, height: ROW_HEIGHT }}
               >
-                <div style={{ width: LEFT_COL - 16 }} className="truncate text-[12px]">
+                <div className="shrink-0 truncate pl-4 pr-3 text-[12px]" style={{ width: LEFT_COL }}>
                   <span style={{ color: "var(--muted-light)" }}>#{p.project_number}</span>{" "}
                   <span style={{ color: "var(--foreground)" }}>{p.name}</span>
+                  {p.dependency && (
+                    <span className="ml-1 text-[10px] italic" style={{ color: "#999" }}>
+                      &larr; etter #{p.dependency}
+                    </span>
+                  )}
                 </div>
-                <span
-                  className="ml-2 rounded-full px-2 py-0.5 text-[10px] font-medium"
-                  style={{
-                    backgroundColor: STATUS_COLORS_SOFT[p.status] || "#eee",
-                    color: "#555",
-                  }}
-                >
-                  {STATUS_LABELS[p.status] || p.status}
-                </span>
+                <div className="relative flex-1" style={{ height: ROW_HEIGHT }}>
+                  <span
+                    className="absolute rounded-full px-2 py-0.5 text-[10px] font-medium"
+                    style={{
+                      top: (ROW_HEIGHT - 20) / 2,
+                      left: 8,
+                      backgroundColor: STATUS_COLORS_SOFT[p.status] || "#eee",
+                      color: "#555",
+                    }}
+                  >
+                    {STATUS_LABELS[p.status] || p.status}
+                  </span>
+                </div>
               </div>
             );
           }
@@ -628,7 +555,7 @@ export default function Timeline({ projects }: TimelineProps) {
               className="absolute flex items-center"
               style={{ top: MONTH_BAR + row.y, left: 0, right: 0, height: ROW_HEIGHT }}
             >
-              {/* Left label */}
+              {/* Left label + dependency text */}
               <div
                 className="shrink-0 truncate pl-4 pr-3 text-[12px]"
                 style={{ width: LEFT_COL }}
@@ -645,6 +572,11 @@ export default function Timeline({ projects }: TimelineProps) {
                 >
                   {p.name}
                 </span>
+                {p.dependency && (
+                  <span className="ml-1 text-[10px] italic" style={{ color: "#999" }}>
+                    &larr; #{p.dependency}
+                  </span>
+                )}
               </div>
 
               {/* Timeline area for this row */}
@@ -684,48 +616,6 @@ export default function Timeline({ projects }: TimelineProps) {
             </div>
           );
         })}
-
-        {/* ── Dependency arrows (SVG overlay on timeline area, viewBox 0-100 for x) ── */}
-        <div
-          className="absolute pointer-events-none"
-          style={{ left: LEFT_COL, top: MONTH_BAR, right: 0, height: totalHeight }}
-        >
-          <svg
-            width="100%"
-            height="100%"
-            viewBox={`0 0 100 ${totalHeight}`}
-            preserveAspectRatio="none"
-            style={{ overflow: "visible" }}
-          >
-            <defs>
-              <marker id="arr" markerWidth="6" markerHeight="5" refX="5" refY="2.5" orient="auto" markerUnits="userSpaceOnUse">
-                <path d="M0,0 L6,2.5 L0,5 Z" fill="#BBB" />
-              </marker>
-            </defs>
-            {depArrows.map((a, i) => {
-              // Route: right edge of source → drop down/up → left edge of target
-              // Use an S-curve that goes right from source, then curves to target
-              const gap = a.to.pct - a.from.pct;
-              const dropPct = Math.max(gap * 0.3, 0.5);
-              // Control points: go right from source, then approach target from left
-              const cp1x = a.from.pct + dropPct;
-              const cp1y = a.from.y;
-              const cp2x = a.to.pct - dropPct;
-              const cp2y = a.to.y;
-              return (
-                <path
-                  key={i}
-                  d={`M${a.from.pct},${a.from.y} C${cp1x},${cp1y} ${cp2x},${cp2y} ${a.to.pct},${a.to.y}`}
-                  fill="none"
-                  stroke="#BBB"
-                  strokeWidth="1.5"
-                  vectorEffect="non-scaling-stroke"
-                  markerEnd="url(#arr)"
-                />
-              );
-            })}
-          </svg>
-        </div>
 
       </div>
 
