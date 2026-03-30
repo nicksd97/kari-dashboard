@@ -2,16 +2,18 @@
 
 import { useState, useRef, useCallback } from "react";
 import type { Project, Checklist } from "@/lib/types";
-import { STATUS_COLORS, STATUS_LABELS, EMPLOYEE_COLORS } from "@/lib/types";
+import { STATUS_COLORS, STATUS_COLORS_SOFT, STATUS_LABELS, EMPLOYEE_COLORS } from "@/lib/types";
 
 interface TimelineProps {
   projects: Project[];
 }
 
 const EMPLOYEES = ["Roar", "Andrii", "Marci"];
-const LEFT_COL = 180;
-const ROW_HEIGHT = 44;
-const HEADER_HEIGHT = 32;
+const LEFT_COL = 200;
+const ROW_HEIGHT = 52;
+const BAR_HEIGHT = 32;
+const HEADER_HEIGHT = 40;
+const MONTH_HEADER = 44;
 
 function daysBetween(a: string, b: string) {
   return Math.round(
@@ -27,24 +29,41 @@ function formatDate(d: string) {
 }
 
 function formatPrice(n: number) {
-  return new Intl.NumberFormat("nb-NO", { style: "currency", currency: "NOK", maximumFractionDigits: 0 }).format(n);
+  return new Intl.NumberFormat("nb-NO", {
+    style: "currency",
+    currency: "NOK",
+    maximumFractionDigits: 0,
+    useGrouping: true,
+  }).format(n);
+}
+
+// Determine if a status color is dark enough to need white text
+function textColorForStatus(status: string): string {
+  const dark = ["pagaende", "materialer", "innkommende", "ferdig", "fakturering"];
+  return dark.includes(status) ? "#1a1a2e" : "#1a1a2e";
 }
 
 export default function Timeline({ projects }: TimelineProps) {
   const [hoveredProject, setHoveredProject] = useState<string | null>(null);
-  const [popupPos, setPopupPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [popupPos, setPopupPos] = useState<{ x: number; y: number }>({
+    x: 0,
+    y: 0,
+  });
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Compute timeline range
-  const datedProjects = projects.filter((p) => p.start_date && p.estimated_end_date);
+  const datedProjects = projects.filter(
+    (p) => p.start_date && p.estimated_end_date
+  );
   const today = new Date().toISOString().split("T")[0];
 
-  const allDates = datedProjects.flatMap((p) => [p.start_date!, p.estimated_end_date!]);
+  const allDates = datedProjects.flatMap((p) => [
+    p.start_date!,
+    p.estimated_end_date!,
+  ]);
   allDates.push(today);
   const minDate = allDates.sort()[0];
   const maxDate = allDates.sort().reverse()[0];
 
-  // Extend range to start of min month and end of max month + 1
   const rangeStart = new Date(minDate);
   rangeStart.setDate(1);
   const rangeEnd = new Date(maxDate);
@@ -55,11 +74,13 @@ export default function Timeline({ projects }: TimelineProps) {
     rangeStart.toISOString().split("T")[0],
     rangeEnd.toISOString().split("T")[0]
   );
-  const dayWidth = Math.max(8, 900 / totalDays);
+  const dayWidth = Math.max(10, 1000 / totalDays);
   const timelineWidth = totalDays * dayWidth;
 
   function dateToX(date: string) {
-    return daysBetween(rangeStart.toISOString().split("T")[0], date) * dayWidth;
+    return (
+      daysBetween(rangeStart.toISOString().split("T")[0], date) * dayWidth
+    );
   }
 
   // Group projects by employee
@@ -68,61 +89,98 @@ export default function Timeline({ projects }: TimelineProps) {
   grouped["Ikke tildelt"] = [];
 
   for (const p of datedProjects) {
-    const key = p.assigned && EMPLOYEES.includes(p.assigned) ? p.assigned : "Ikke tildelt";
+    const key =
+      p.assigned && EMPLOYEES.includes(p.assigned)
+        ? p.assigned
+        : "Ikke tildelt";
     grouped[key].push(p);
   }
 
-  // Also add undated projects to "Ikke tildelt"
-  const undated = projects.filter((p) => !p.start_date || !p.estimated_end_date);
+  const undated = projects.filter(
+    (p) => !p.start_date || !p.estimated_end_date
+  );
 
   // Generate month labels
   const months: { label: string; x: number }[] = [];
   const cursor = new Date(rangeStart);
   while (cursor < rangeEnd) {
-    const label = cursor.toLocaleDateString("nb-NO", { month: "short", year: "numeric" });
+    const label = cursor.toLocaleDateString("nb-NO", {
+      month: "short",
+      year: "numeric",
+    });
     const x = dateToX(cursor.toISOString().split("T")[0]);
     months.push({ label, x });
     cursor.setMonth(cursor.getMonth() + 1);
   }
 
-  // Today line
   const todayX = dateToX(today);
+  const projectByNumber = new Map(
+    projects.map((p) => [p.project_number, p])
+  );
 
-  // Build dependency lookup
-  const projectByNumber = new Map(projects.map((p) => [p.project_number, p]));
-
-  // Calculate rows
+  // Calculate rows - track group boundaries for alternating bg
   let currentY = 0;
-  const rows: { project: Project; y: number; group: string }[] = [];
+  const rows: {
+    project: Project;
+    y: number;
+    group: string;
+    indexInGroup: number;
+  }[] = [];
+  const groupSections: {
+    label: string;
+    color: string;
+    y: number;
+    height: number;
+  }[] = [];
 
   for (const emp of [...EMPLOYEES, "Ikke tildelt"]) {
     const group = grouped[emp];
     if (group.length === 0 && emp !== "Ikke tildelt") continue;
 
+    const sectionStart = currentY;
     currentY += HEADER_HEIGHT;
-    for (const p of group) {
-      rows.push({ project: p, y: currentY, group: emp });
+    group.forEach((p, idx) => {
+      rows.push({ project: p, y: currentY, group: emp, indexInGroup: idx });
       currentY += ROW_HEIGHT;
-    }
+    });
+    groupSections.push({
+      label: emp,
+      color: EMPLOYEE_COLORS[emp] || "#888780",
+      y: sectionStart,
+      height: currentY - sectionStart,
+    });
   }
 
-  // Add undated projects section
   if (undated.length > 0) {
+    const sectionStart = currentY;
     currentY += HEADER_HEIGHT;
-    for (const p of undated) {
-      rows.push({ project: p, y: currentY, group: "Uten dato" });
+    undated.forEach((p, idx) => {
+      rows.push({
+        project: p,
+        y: currentY,
+        group: "Uten dato",
+        indexInGroup: idx,
+      });
       currentY += ROW_HEIGHT;
-    }
+    });
+    groupSections.push({
+      label: "Uten dato",
+      color: "#888780",
+      y: sectionStart,
+      height: currentY - sectionStart,
+    });
   }
 
-  const totalHeight = currentY + 20;
+  const totalHeight = Math.max(500, currentY + 20);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
+    const scrollLeft = containerRef.current.scrollLeft;
+    const scrollTop = containerRef.current.scrollTop;
     setPopupPos({
-      x: e.clientX - rect.left + 16,
-      y: e.clientY - rect.top - 8,
+      x: e.clientX - rect.left + scrollLeft + 20,
+      y: e.clientY - rect.top + scrollTop - 12,
     });
   }, []);
 
@@ -130,15 +188,20 @@ export default function Timeline({ projects }: TimelineProps) {
     ? projects.find((p) => p.project_number === hoveredProject)
     : null;
 
-  // Dependency lines
-  const depLines: { from: { x: number; y: number }; to: { x: number; y: number } }[] = [];
+  // Dependency arrows (curved)
+  const depArrows: {
+    from: { x: number; y: number };
+    to: { x: number; y: number };
+  }[] = [];
   for (const row of rows) {
     if (row.project.dependency) {
       const dep = projectByNumber.get(row.project.dependency);
       if (dep?.estimated_end_date && row.project.start_date) {
-        const depRow = rows.find((r) => r.project.project_number === dep.project_number);
+        const depRow = rows.find(
+          (r) => r.project.project_number === dep.project_number
+        );
         if (depRow) {
-          depLines.push({
+          depArrows.push({
             from: {
               x: dateToX(dep.estimated_end_date),
               y: depRow.y + ROW_HEIGHT / 2,
@@ -153,109 +216,178 @@ export default function Timeline({ projects }: TimelineProps) {
     }
   }
 
-  // Render group headers
-  let headerY = 0;
-  const headers: { label: string; y: number; color: string }[] = [];
-  for (const emp of [...EMPLOYEES, "Ikke tildelt"]) {
-    const group = grouped[emp];
-    if (group.length === 0 && emp !== "Ikke tildelt") continue;
-    headers.push({
-      label: emp,
-      y: headerY,
-      color: EMPLOYEE_COLORS[emp] || "#888780",
-    });
-    headerY += HEADER_HEIGHT + group.length * ROW_HEIGHT;
-  }
-  if (undated.length > 0) {
-    headers.push({ label: "Uten dato", y: headerY, color: "#888780" });
-  }
-
   return (
     <div
       ref={containerRef}
-      className="relative overflow-x-auto rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900"
+      className="relative overflow-x-auto rounded-xl"
+      style={{
+        border: "1px solid var(--card-border)",
+        backgroundColor: "var(--card-bg)",
+        minHeight: 500,
+      }}
       onMouseMove={handleMouseMove}
     >
       <div
         className="relative"
-        style={{ minWidth: LEFT_COL + timelineWidth + 40, height: totalHeight + 40 }}
+        style={{
+          minWidth: LEFT_COL + timelineWidth + 60,
+          height: totalHeight + MONTH_HEADER,
+        }}
       >
-        {/* Month labels */}
+        {/* Month header row */}
         <div
-          className="sticky top-0 z-10 flex border-b border-gray-100 bg-white/90 backdrop-blur dark:border-gray-800 dark:bg-gray-900/90"
-          style={{ paddingLeft: LEFT_COL }}
+          className="sticky top-0 z-10 flex"
+          style={{
+            height: MONTH_HEADER,
+            paddingLeft: LEFT_COL,
+            borderBottom: "1px solid var(--divider)",
+            backgroundColor: "var(--card-bg)",
+          }}
         >
-          {months.map((m) => (
-            <div
-              key={m.label}
-              className="text-[11px] font-medium text-gray-400 dark:text-gray-500 py-1.5"
-              style={{
-                position: "absolute",
-                left: LEFT_COL + m.x,
-              }}
-            >
-              {m.label}
-            </div>
-          ))}
+          {months.map((m, i) => {
+            const nextX =
+              i < months.length - 1
+                ? months[i + 1].x
+                : timelineWidth;
+            return (
+              <div
+                key={m.label}
+                className="absolute flex items-end pb-2"
+                style={{ left: LEFT_COL + m.x, width: nextX - m.x }}
+              >
+                <span
+                  className="text-[12px] font-medium uppercase"
+                  style={{
+                    color: "var(--muted-light)",
+                    letterSpacing: "0.05em",
+                  }}
+                >
+                  {m.label}
+                </span>
+              </div>
+            );
+          })}
         </div>
+
+        {/* Vertical gridlines for months */}
+        {months.map((m) => (
+          <div
+            key={`grid-${m.label}`}
+            className="absolute"
+            style={{
+              left: LEFT_COL + m.x,
+              top: MONTH_HEADER,
+              bottom: 0,
+              width: 1,
+              height: totalHeight,
+              background: "var(--divider)",
+              opacity: 0.5,
+            }}
+          />
+        ))}
 
         {/* Today line */}
         <div
-          className="absolute z-20 w-px bg-red-500"
+          className="absolute z-20"
           style={{
             left: LEFT_COL + todayX,
             top: 0,
-            height: totalHeight + 40,
+            height: totalHeight + MONTH_HEADER,
+            width: 2,
+            backgroundColor: "#ef4444",
           }}
         >
-          <span className="absolute -top-0 -translate-x-1/2 rounded bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+          <span
+            className="absolute -translate-x-1/2 rounded-b-md px-2 py-0.5 text-[10px] font-bold text-white"
+            style={{ backgroundColor: "#ef4444", top: 0 }}
+          >
             I dag
           </span>
         </div>
 
-        {/* Group headers + rows */}
-        <div style={{ paddingTop: 32 }}>
-          {headers.map((h) => (
+        {/* Group sections with alternating rows */}
+        {groupSections.map((section) => (
+          <div key={section.label}>
+            {/* Group header */}
             <div
-              key={h.label}
-              className="flex items-center gap-2 px-3 py-1"
-              style={{ height: HEADER_HEIGHT, marginTop: h.y > 0 ? 0 : undefined }}
+              className="absolute flex items-center gap-2.5 px-4"
+              style={{
+                top: MONTH_HEADER + section.y,
+                left: 0,
+                right: 0,
+                height: HEADER_HEIGHT,
+                backgroundColor: "var(--surface)",
+                borderLeft: `3px solid ${section.color}`,
+                borderBottom: "1px solid var(--divider)",
+              }}
             >
               <span
-                className="h-2.5 w-2.5 rounded-full"
-                style={{ backgroundColor: h.color }}
+                className="h-2 w-2 rounded-full"
+                style={{ backgroundColor: section.color }}
               />
-              <span className="text-xs font-semibold text-gray-600 dark:text-gray-300">
-                {h.label}
+              <span
+                className="text-[12px] font-semibold uppercase"
+                style={{
+                  color: "var(--foreground)",
+                  letterSpacing: "0.04em",
+                }}
+              >
+                {section.label}
               </span>
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
 
-        {/* Project bars */}
+        {/* Alternating row backgrounds */}
+        {rows.map((row) => (
+          <div
+            key={`bg-${row.project.project_number}`}
+            className="absolute"
+            style={{
+              top: MONTH_HEADER + row.y,
+              left: 0,
+              right: 0,
+              height: ROW_HEIGHT,
+              backgroundColor:
+                row.indexInGroup % 2 === 1 ? "var(--surface)" : "transparent",
+              minWidth: LEFT_COL + timelineWidth + 60,
+            }}
+          />
+        ))}
+
+        {/* Project rows */}
         {rows.map((row) => {
           const p = row.project;
+
           if (!p.start_date || !p.estimated_end_date) {
-            // Undated project - show as text only
             return (
               <div
                 key={p.project_number}
-                className="absolute flex items-center px-3 text-xs text-gray-500"
+                className="absolute flex items-center px-4"
                 style={{
-                  top: 32 + row.y,
+                  top: MONTH_HEADER + row.y,
                   left: 0,
                   height: ROW_HEIGHT,
                   width: LEFT_COL + timelineWidth,
                 }}
               >
-                <span className="w-[180px] truncate pr-2 font-medium text-gray-700 dark:text-gray-300">
+                <span
+                  className="text-[12px] font-medium"
+                  style={{
+                    width: LEFT_COL - 16,
+                    color: "var(--foreground)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
                   #{p.project_number} {p.name}
                 </span>
                 <span
-                  className="rounded-full px-2 py-0.5 text-[10px] font-medium"
+                  className="ml-2 rounded-full px-2.5 py-0.5 text-[10px] font-semibold"
                   style={{
-                    backgroundColor: STATUS_COLORS[p.status] || "#ddd",
-                    color: "#333",
+                    backgroundColor: STATUS_COLORS_SOFT[p.status] || "#ddd",
+                    color: "#1a1a2e",
                   }}
                 >
                   {STATUS_LABELS[p.status] || p.status}
@@ -265,10 +397,7 @@ export default function Timeline({ projects }: TimelineProps) {
           }
 
           const x = dateToX(p.start_date);
-          const width = Math.max(
-            30,
-            dateToX(p.estimated_end_date) - x
-          );
+          const width = Math.max(60, dateToX(p.estimated_end_date) - x);
           const isFerdig = p.status === "ferdig";
           const isHovered = hoveredProject === p.project_number;
 
@@ -276,67 +405,111 @@ export default function Timeline({ projects }: TimelineProps) {
             <div
               key={p.project_number}
               className="absolute flex items-center"
-              style={{ top: 32 + row.y, left: 0, height: ROW_HEIGHT }}
+              style={{
+                top: MONTH_HEADER + row.y,
+                left: 0,
+                height: ROW_HEIGHT,
+              }}
             >
               {/* Left label */}
-              <div className="w-[180px] truncate pr-2 pl-3 text-xs font-medium text-gray-700 dark:text-gray-300">
-                #{p.project_number} {p.name}
+              <div
+                className="truncate pl-4 pr-3 text-[12px] font-medium"
+                style={{
+                  width: LEFT_COL,
+                  color: isFerdig ? "var(--muted-light)" : "var(--foreground)",
+                  textDecoration: isFerdig ? "line-through" : "none",
+                }}
+              >
+                <span style={{ color: "var(--muted-light)" }}>
+                  #{p.project_number}
+                </span>{" "}
+                {p.name}
               </div>
 
               {/* Bar */}
               <div
-                className="absolute rounded-md cursor-pointer transition-all text-[11px] font-medium flex items-center px-2 overflow-hidden whitespace-nowrap"
+                className={`absolute flex items-center gap-1.5 rounded-lg px-3 cursor-pointer transition-all duration-150 overflow-hidden whitespace-nowrap ${
+                  isFerdig ? "bar-completed" : ""
+                }`}
                 style={{
                   left: LEFT_COL + x,
                   width,
-                  height: 28,
-                  top: (ROW_HEIGHT - 28) / 2,
+                  height: BAR_HEIGHT,
+                  top: (ROW_HEIGHT - BAR_HEIGHT) / 2,
                   backgroundColor: STATUS_COLORS[p.status] || "#ddd",
-                  opacity: isFerdig ? 0.6 : 1,
-                  border: isHovered ? "2px solid rgba(0,0,0,0.3)" : "2px solid transparent",
-                  color: "#1a1a2e",
+                  opacity: isFerdig ? 0.7 : 1,
+                  boxShadow: isHovered
+                    ? "0 2px 8px rgba(0,0,0,0.15)"
+                    : "0 1px 2px rgba(0,0,0,0.05)",
+                  border: isHovered
+                    ? "2px solid rgba(0,0,0,0.25)"
+                    : "2px solid transparent",
+                  color: textColorForStatus(p.status),
                 }}
                 onMouseEnter={() => setHoveredProject(p.project_number)}
                 onMouseLeave={() => setHoveredProject(null)}
               >
-                {p.name}
+                <span className="text-[11px] font-medium opacity-60">
+                  #{p.project_number}
+                </span>
+                <span className="text-[12px] font-medium truncate">
+                  {p.name}
+                </span>
               </div>
             </div>
           );
         })}
 
-        {/* Dependency lines */}
+        {/* Dependency arrows - curved SVG */}
         <svg
-          className="absolute top-8 pointer-events-none"
+          className="absolute pointer-events-none"
           style={{
             left: LEFT_COL,
+            top: MONTH_HEADER,
             width: timelineWidth,
             height: totalHeight,
           }}
         >
-          {depLines.map((line, i) => (
-            <line
-              key={i}
-              x1={line.from.x}
-              y1={line.from.y}
-              x2={line.to.x}
-              y2={line.to.y}
-              stroke="#888"
-              strokeWidth="1.5"
-              strokeDasharray="4 3"
-              markerEnd="url(#arrow)"
-            />
-          ))}
           <defs>
-            <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-              <path d="M0,0 L6,3 L0,6 Z" fill="#888" />
+            <marker
+              id="arrowhead"
+              markerWidth="8"
+              markerHeight="6"
+              refX="7"
+              refY="3"
+              orient="auto"
+            >
+              <path d="M0,0 L8,3 L0,6 Z" fill="#9ca3af" />
             </marker>
           </defs>
+          {depArrows.map((arrow, i) => {
+            const midX = (arrow.from.x + arrow.to.x) / 2;
+            const cp1x = midX;
+            const cp1y = arrow.from.y;
+            const cp2x = midX;
+            const cp2y = arrow.to.y;
+            return (
+              <path
+                key={i}
+                d={`M ${arrow.from.x} ${arrow.from.y} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${arrow.to.x} ${arrow.to.y}`}
+                fill="none"
+                stroke="#9ca3af"
+                strokeWidth="1.5"
+                strokeDasharray="6 4"
+                markerEnd="url(#arrowhead)"
+              />
+            );
+          })}
         </svg>
 
         {/* Hover popup */}
         {hoveredData && (
-          <HoverPopup project={hoveredData} x={popupPos.x} y={popupPos.y} projects={projects} />
+          <HoverPopup
+            project={hoveredData}
+            x={popupPos.x}
+            y={popupPos.y}
+            projects={projects}
+          />
         )}
       </div>
     </div>
@@ -354,30 +527,53 @@ function HoverPopup({
   y: number;
   projects: Project[];
 }) {
-  const dep = p.dependency ? projects.find((pr) => pr.project_number === p.dependency) : null;
+  const dep = p.dependency
+    ? projects.find((pr) => pr.project_number === p.dependency)
+    : null;
   const duration =
     p.start_date && p.estimated_end_date
       ? daysBetween(p.start_date, p.estimated_end_date)
       : null;
 
   const allChecklistsDone =
-    p.checklists && p.checklists.length > 0 && p.checklists.every((c) => c.done === c.total);
-  const showWarning = p.status === "ferdig" && p.checklists && p.checklists.length > 0 && !allChecklistsDone;
+    p.checklists &&
+    p.checklists.length > 0 &&
+    p.checklists.every((c) => c.done === c.total);
+  const showWarning =
+    p.status === "ferdig" &&
+    p.checklists &&
+    p.checklists.length > 0 &&
+    !allChecklistsDone;
 
   return (
     <div
-      className="absolute z-50 w-72 rounded-xl border border-gray-200 bg-white p-4 shadow-xl dark:border-gray-700 dark:bg-gray-800"
-      style={{ left: x, top: y, pointerEvents: "none" }}
+      className="popup-enter absolute z-50 rounded-xl bg-[var(--card-bg)] p-5"
+      style={{
+        left: x,
+        top: y,
+        width: 360,
+        pointerEvents: "none",
+        border: "1px solid var(--card-border)",
+        boxShadow:
+          "0 10px 40px rgba(0,0,0,0.12), 0 2px 10px rgba(0,0,0,0.08)",
+      }}
     >
-      <div className="mb-2 flex items-start justify-between gap-2">
+      <div className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] text-gray-400">#{p.project_number}</p>
-          <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{p.name}</p>
+          <p
+            className="text-[11px] font-medium"
+            style={{ color: "var(--muted-light)" }}
+          >
+            #{p.project_number}
+          </p>
+          <p className="mt-0.5 text-[15px] font-bold text-gray-900 dark:text-gray-100">
+            {p.name}
+          </p>
         </div>
         <span
-          className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+          className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold"
           style={{
-            backgroundColor: STATUS_COLORS[p.status] || "#ddd",
+            backgroundColor: STATUS_COLORS_SOFT[p.status] || "#ddd",
             color: "#1a1a2e",
           }}
         >
@@ -386,67 +582,99 @@ function HoverPopup({
       </div>
 
       {p.assigned && (
-        <div className="mb-2 flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
+        <div
+          className="mb-3 flex items-center gap-2 text-[13px]"
+          style={{ color: "var(--muted)" }}
+        >
           <span
-            className="h-2.5 w-2.5 rounded-full"
-            style={{ backgroundColor: EMPLOYEE_COLORS[p.assigned] || "#888" }}
+            className="h-3 w-3 rounded-full"
+            style={{
+              backgroundColor: EMPLOYEE_COLORS[p.assigned] || "#888",
+            }}
           />
-          {p.assigned}
+          <span className="font-medium">{p.assigned}</span>
         </div>
       )}
 
       {dep && (
-        <p className="mb-2 text-[11px] text-gray-500 dark:text-gray-400">
-          Avhenger av #{dep.project_number} {dep.name}
+        <p
+          className="mb-3 text-[12px]"
+          style={{ color: "var(--muted)" }}
+        >
+          Avhenger av{" "}
+          <span className="font-medium text-gray-700 dark:text-gray-300">
+            #{dep.project_number} {dep.name}
+          </span>
           {dep.status !== "ferdig" && (
-            <span className="ml-1 text-amber-600 font-medium">(ikke ferdig)</span>
+            <span className="ml-1 font-semibold text-amber-600">
+              (ikke ferdig)
+            </span>
           )}
         </p>
       )}
 
-      <div className="mb-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-300">
+      <div
+        className="mb-3 grid grid-cols-2 gap-x-6 gap-y-2 text-[12px]"
+        style={{ color: "var(--foreground)" }}
+      >
         {p.start_date && (
           <div>
-            <span className="text-gray-400">Start:</span> {formatDate(p.start_date)}
+            <span style={{ color: "var(--muted-light)" }}>Start: </span>
+            {formatDate(p.start_date)}
           </div>
         )}
         {p.estimated_end_date && (
           <div>
-            <span className="text-gray-400">Slutt:</span> {formatDate(p.estimated_end_date)}
+            <span style={{ color: "var(--muted-light)" }}>Slutt: </span>
+            {formatDate(p.estimated_end_date)}
           </div>
         )}
-        {p.agreed_price && (
+        {p.agreed_price != null && (
           <div>
-            <span className="text-gray-400">Pris:</span> {formatPrice(p.agreed_price)}
+            <span style={{ color: "var(--muted-light)" }}>Pris: </span>
+            {formatPrice(p.agreed_price)}
           </div>
         )}
-        {duration && (
+        {duration != null && (
           <div>
-            <span className="text-gray-400">Varighet:</span> {duration} dager
+            <span style={{ color: "var(--muted-light)" }}>Varighet: </span>
+            {duration} dager
           </div>
         )}
       </div>
 
       {p.checklists && p.checklists.length > 0 && (
-        <div className="mt-2 space-y-1.5 border-t border-gray-100 pt-2 dark:border-gray-700">
-          <p className="text-[10px] font-semibold uppercase text-gray-400">Sjekklister</p>
+        <div
+          className="mt-3 space-y-2.5 pt-3"
+          style={{ borderTop: "1px solid var(--divider)" }}
+        >
+          <p
+            className="text-[10px] font-semibold uppercase"
+            style={{
+              color: "var(--muted-light)",
+              letterSpacing: "0.05em",
+            }}
+          >
+            Sjekklister
+          </p>
           {p.checklists.map((c) => (
-            <ChecklistIcon key={c.name} checklist={c} />
+            <ChecklistRow key={c.name} checklist={c} />
           ))}
         </div>
       )}
 
       {showWarning && (
-        <div className="mt-2 rounded-lg bg-amber-50 p-2 text-[11px] font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-          Sjekklister må godkjennes før prosjektet kan lukkes
+        <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2.5 text-[11px] font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+          Sjekklister m&aring; godkjennes f&oslash;r prosjektet kan lukkes
         </div>
       )}
     </div>
   );
 }
 
-function ChecklistIcon({ checklist }: { checklist: Checklist }) {
-  const ratio = checklist.total > 0 ? checklist.done / checklist.total : 0;
+function ChecklistRow({ checklist }: { checklist: Checklist }) {
+  const ratio =
+    checklist.total > 0 ? checklist.done / checklist.total : 0;
   let bg: string, icon: string;
   if (ratio === 1) {
     bg = "#22c55e";
@@ -460,21 +688,30 @@ function ChecklistIcon({ checklist }: { checklist: Checklist }) {
   }
 
   return (
-    <div className="flex items-center gap-2 text-xs">
+    <div className="flex items-center gap-2.5 text-[12px]">
       <span
-        className="inline-flex h-5 w-5 items-center justify-center rounded-full text-white text-[10px] font-bold shrink-0"
+        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
         style={{ backgroundColor: bg }}
       >
         {icon}
       </span>
-      <span className="text-gray-700 dark:text-gray-300 shrink-0">{checklist.name}</span>
-      <div className="flex-1 h-1.5 rounded-full bg-gray-200 dark:bg-gray-700 min-w-[40px]">
+      <span className="shrink-0 font-medium text-gray-700 dark:text-gray-300">
+        {checklist.name}
+      </span>
+      <div className="flex-1 h-1.5 min-w-[48px] overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
         <div
-          className="h-full rounded-full"
-          style={{ width: `${ratio * 100}%`, backgroundColor: bg }}
+          className="h-full rounded-full transition-all"
+          style={{
+            width: `${ratio * 100}%`,
+            backgroundColor: bg,
+            height: 6,
+          }}
         />
       </div>
-      <span className="text-gray-500 dark:text-gray-400 shrink-0">
+      <span
+        className="shrink-0 text-[11px] font-medium"
+        style={{ color: "var(--muted)" }}
+      >
         {checklist.done}/{checklist.total}
       </span>
     </div>

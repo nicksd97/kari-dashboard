@@ -29,7 +29,19 @@ export interface Lead {
   address: string;
 }
 
+// Slightly more saturated bar colors
 export const STATUS_COLORS: Record<string, string> = {
+  innkommende: "#9CC8F0",
+  planlegging: "#B8B4F0",
+  materialer: "#F5B84D",
+  pagaende: "#6DD4B1",
+  "venter kunde": "#F0A893",
+  fakturering: "#EEA4BC",
+  ferdig: "#A8D175",
+};
+
+// Softer badge/card colors
+export const STATUS_COLORS_SOFT: Record<string, string> = {
   innkommende: "#B5D4F4",
   planlegging: "#CECBF6",
   materialer: "#FAC775",

@@ -30,6 +30,14 @@ export default function Dashboard() {
     load();
   }, []);
 
+  const now = new Date().toLocaleString("nb-NO", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center">
@@ -39,65 +47,84 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1200px] px-4 py-6 sm:px-6">
+    <div className="mx-auto flex min-h-full w-full max-w-[1400px] flex-col px-6 py-8 sm:px-10">
       {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center gap-3">
+      <div className="mb-8">
+        <div className="flex items-end gap-4">
           <div>
-            <p className="text-xs font-medium tracking-wide text-gray-400 uppercase">
+            <p className="text-[13px] font-medium tracking-[0.05em] uppercase"
+               style={{ color: "var(--muted-light)" }}>
               R. Samdal Snekkeri
             </p>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-50">
+            <h1 className="mt-1 text-[28px] font-bold leading-tight text-gray-900 dark:text-gray-50">
               Prosjektoversikt
             </h1>
           </div>
           <span
-            className={`ml-auto rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+            className={`mb-1 ml-auto flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold ${
               isLive
-                ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"
-                : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
+                ? "bg-green-50 text-green-700 ring-1 ring-green-200 dark:bg-green-950/40 dark:text-green-300 dark:ring-green-800"
+                : "bg-gray-100 text-gray-500 ring-1 ring-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700"
             }`}
           >
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                isLive ? "bg-green-500" : "bg-gray-400"
+              }`}
+            />
             {isLive ? "Live data" : "Demo data"}
           </span>
         </div>
       </div>
 
       {/* Stat cards */}
-      <div className="mb-6">
+      <div className="mb-8">
         <StatCards projects={projects} leads={leads} />
       </div>
 
       {/* Tab bar */}
-      <div className="mb-4 flex gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-800">
+      <div className="mb-6 flex gap-6" style={{ borderBottom: "1px solid var(--divider)" }}>
         <button
           onClick={() => setTab("timeline")}
-          className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-            tab === "timeline"
-              ? "bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-gray-100"
-              : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-          }`}
+          className="relative pb-3 text-[14px] font-medium transition-colors"
+          style={{
+            color: tab === "timeline" ? "var(--foreground)" : "var(--muted-light)",
+            letterSpacing: "0.01em",
+          }}
         >
           Prosjekt-tidslinje
+          {tab === "timeline" && (
+            <span className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-gray-900 dark:bg-gray-100" />
+          )}
         </button>
         <button
           onClick={() => setTab("leads")}
-          className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-            tab === "leads"
-              ? "bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-gray-100"
-              : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-          }`}
+          className="relative pb-3 text-[14px] font-medium transition-colors"
+          style={{
+            color: tab === "leads" ? "var(--foreground)" : "var(--muted-light)",
+            letterSpacing: "0.01em",
+          }}
         >
           Lead-pipeline
+          {tab === "leads" && (
+            <span className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-gray-900 dark:bg-gray-100" />
+          )}
         </button>
       </div>
 
       {/* Content */}
-      {tab === "timeline" ? (
-        <Timeline projects={projects} />
-      ) : (
-        <LeadPipeline leads={leads} />
-      )}
+      <div className="flex-1">
+        {tab === "timeline" ? (
+          <Timeline projects={projects} />
+        ) : (
+          <LeadPipeline leads={leads} />
+        )}
+      </div>
+
+      {/* Footer */}
+      <footer className="mt-10 pb-4 text-center text-[11px] font-normal" style={{ color: "var(--muted-light)" }}>
+        Kari AI — R. Samdal Snekkeri &middot; Sist oppdatert: {now}
+      </footer>
     </div>
   );
 }

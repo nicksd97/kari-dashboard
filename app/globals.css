@@ -7,14 +7,28 @@
 }
 
 :root {
-  --background: #f8f9fa;
+  --background: #f5f6f8;
   --foreground: #1a1a2e;
+  --card-bg: #ffffff;
+  --card-border: #e5e7eb;
+  --muted: #6b7280;
+  --muted-light: #9ca3af;
+  --surface: #f9fafb;
+  --surface-hover: #f3f4f6;
+  --divider: #e5e7eb;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0f0f14;
+    --background: #0c0c12;
     --foreground: #e8e8ed;
+    --card-bg: #16161e;
+    --card-border: #2a2a36;
+    --muted: #9ca3af;
+    --muted-light: #6b7280;
+    --surface: #1a1a24;
+    --surface-hover: #22222e;
+    --divider: #2a2a36;
   }
 }
 
@@ -26,8 +40,8 @@ body {
 
 /* Scrollbar styling */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
@@ -35,10 +49,68 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c4c4c4;
-  border-radius: 3px;
+  background: #d1d5db;
+  border-radius: 4px;
 }
 
-.dark ::-webkit-scrollbar-thumb {
-  background: #444;
+::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+@media (prefers-color-scheme: dark) {
+  ::-webkit-scrollbar-thumb {
+    background: #374151;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #4b5563;
+  }
+}
+
+/* Forfalt pulse animation */
+@keyframes pulse-badge {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.pulse-badge {
+  animation: pulse-badge 2s ease-in-out infinite;
+}
+
+/* Popup enter animation */
+@keyframes popup-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.popup-enter {
+  animation: popup-enter 0.15s ease-out;
+}
+
+/* Completed project hatching */
+.bar-completed {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 4px,
+    rgba(0,0,0,0.07) 4px,
+    rgba(0,0,0,0.07) 8px
+  );
+}
+
+@media (prefers-color-scheme: dark) {
+  .bar-completed {
+    background-image: repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 4px,
+      rgba(255,255,255,0.08) 4px,
+      rgba(255,255,255,0.08) 8px
+    );
+  }
 }

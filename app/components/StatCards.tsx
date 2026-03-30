@@ -25,30 +25,34 @@ export default function StatCards({ projects, leads }: StatCardsProps) {
   ).length;
 
   const cards = [
-    { label: "Pågående", value: active, color: "#9FE1CB" },
-    { label: "I planlegging", value: planning, color: "#CECBF6" },
-    { label: "Ferdig", value: completed, color: "#C0DD97" },
-    { label: "Nye leads", value: newLeads, color: "#B5D4F4" },
+    { label: "Pågående", value: active, color: "#6DD4B1" },
+    { label: "I planlegging", value: planning, color: "#B8B4F0" },
+    { label: "Ferdig", value: completed, color: "#A8D175" },
+    { label: "Nye leads", value: newLeads, color: "#9CC8F0" },
     {
       label: "Forfalt oppfølging",
       value: overdueFollowups,
-      color: overdueFollowups > 0 ? "#ef4444" : "#888780",
-      urgent: overdueFollowups > 0,
+      color: overdueFollowups > 0 ? "#ef4444" : "#9ca3af",
     },
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
       {cards.map((card) => (
         <div
           key={card.label}
-          className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900"
+          className="relative rounded-xl bg-[var(--card-bg)] px-5 py-5"
+          style={{
+            border: "1px solid var(--card-border)",
+            borderLeft: `3px solid ${card.color}`,
+            minHeight: 80,
+          }}
         >
-          <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+          <p className="text-[13px] font-medium" style={{ color: "var(--muted)" }}>
             {card.label}
           </p>
           <p
-            className="mt-1 text-2xl font-bold"
+            className="mt-2 text-[32px] font-bold leading-none"
             style={{ color: card.color }}
           >
             {card.value}
