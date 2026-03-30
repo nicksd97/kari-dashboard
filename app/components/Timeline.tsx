@@ -2,7 +2,12 @@
 
 import { useState, useRef, useCallback } from "react";
 import type { Project, Checklist } from "@/lib/types";
-import { STATUS_COLORS, STATUS_COLORS_SOFT, STATUS_LABELS, EMPLOYEE_COLORS } from "@/lib/types";
+import {
+  STATUS_COLORS,
+  STATUS_COLORS_SOFT,
+  STATUS_LABELS,
+  EMPLOYEE_COLORS,
+} from "@/lib/types";
 
 interface TimelineProps {
   projects: Project[];
@@ -37,11 +42,151 @@ function formatPrice(n: number) {
   }).format(n);
 }
 
-// Determine if a status color is dark enough to need white text
 function textColorForStatus(status: string): string {
-  const dark = ["pagaende", "materialer", "innkommende", "ferdig", "fakturering"];
-  return dark.includes(status) ? "#1a1a2e" : "#1a1a2e";
+  void status;
+  return "#1a1a2e";
 }
+
+// --- Stage workflow logic ---
+
+type StageKey = 1 | 2 | 3;
+
+const STAGE_LABELS: Record<StageKey, string> = {
+  1: "Oppstart",
+  2: "Pågående",
+  3: "Avslutning",
+};
+
+const STAGE_ITEMS: Record<StageKey, string[]> = {
+  1: [
+    "Kontrakt signert",
+    "Prosjektmappe opprettet",
+    "Materialliste klar",
+    "Planner-oppgave opprettet",
+    "Kickoff med team",
+  ],
+  2: [
+    "Vernerunde gjennomført",
+    "Materialer bestilt/levert",
+    "Kvalitetskontroll underveis",
+    "Timer og kostnader loggført",
+    "Oppfølging med kunde",
+  ],
+  3: [
+    "Kvalitetskontroll ferdig",
+    "Ferdigstillelse-sjekkliste",
+    "FDV-dokumentasjon levert",
+    "Sluttfaktura sendt",
+    "Prosjekt lukket i Planner",
+  ],
+};
+
+function getActiveStage(status: string): StageKey {
+  if (status === "innkommende" || status === "planlegging") return 1;
+  if (
+    status === "materialer" ||
+    status === "pagaende" ||
+    status === "venter kunde"
+  )
+    return 2;
+  return 3;
+}
+
+function getStageState(
+  stageKey: StageKey,
+  activeStage: StageKey,
+  allChecklistsPassed: boolean,
+  isFerdig: boolean
+): "completed" | "active" | "future" {
+  if (isFerdig && allChecklistsPassed) return "completed";
+  if (stageKey < activeStage) return "completed";
+  if (stageKey === activeStage) return "active";
+  return "future";
+}
+
+function isItemComplete(
+  stageKey: StageKey,
+  itemIndex: number,
+  activeStage: StageKey,
+  checklists: Checklist[] | undefined,
+  isFerdig: boolean,
+  allChecklistsPassed: boolean
+): boolean {
+  // If ferdig and all checklists passed, everything is done
+  if (isFerdig && allChecklistsPassed) return true;
+
+  // Past stages: all items complete
+  if (stageKey < activeStage) return true;
+
+  // Future stages: nothing complete
+  if (stageKey > activeStage) return false;
+
+  // Current stage: check specific items against checklists
+  const cls = checklists || [];
+
+  if (stageKey === 2) {
+    const itemName = STAGE_ITEMS[2][itemIndex];
+    if (itemName === "Vernerunde gjennomført") {
+      const v = cls.find((c) =>
+        c.name.toLowerCase().includes("vernerunde")
+      );
+      return v ? v.done === v.total : false;
+    }
+    if (itemName === "Kvalitetskontroll underveis") {
+      const q = cls.find((c) =>
+        c.name.toLowerCase().includes("kvalitetskontroll")
+      );
+      return q ? q.done === q.total : false;
+    }
+  }
+
+  if (stageKey === 3) {
+    const itemName = STAGE_ITEMS[3][itemIndex];
+    if (itemName === "Kvalitetskontroll ferdig") {
+      const q = cls.find((c) =>
+        c.name.toLowerCase().includes("kvalitetskontroll")
+      );
+      return q ? q.done === q.total : false;
+    }
+    if (itemName === "Ferdigstillelse-sjekkliste") {
+      const f = cls.find((c) =>
+        c.name.toLowerCase().includes("ferdigstillelse")
+      );
+      return f ? f.done === f.total : false;
+    }
+    if (itemName === "Sluttfaktura sendt") {
+      return isFerdig || activeStage === 3;
+    }
+    if (itemName === "Prosjekt lukket i Planner") {
+      return isFerdig;
+    }
+  }
+
+  return false;
+}
+
+function getChecklistForItem(
+  stageKey: StageKey,
+  itemIndex: number,
+  checklists: Checklist[] | undefined
+): Checklist | null {
+  const cls = checklists || [];
+  if (stageKey === 2) {
+    if (itemIndex === 0)
+      return cls.find((c) => c.name.toLowerCase().includes("vernerunde")) || null;
+    if (itemIndex === 2)
+      return cls.find((c) => c.name.toLowerCase().includes("kvalitetskontroll")) || null;
+  }
+  if (stageKey === 3) {
+    if (itemIndex === 0)
+      return cls.find((c) => c.name.toLowerCase().includes("kvalitetskontroll")) || null;
+    if (itemIndex === 1)
+      return cls.find((c) => c.name.toLowerCase().includes("ferdigstillelse")) || null;
+  }
+  return null;
+}
+
+// --- Main component ---
 
 export default function Timeline({ projects }: TimelineProps) {
   const [hoveredProject, setHoveredProject] = useState<string | null>(null);
@@ -50,6 +195,7 @@ export default function Timeline({ projects }: TimelineProps) {
     y: 0,
   });
   const containerRef = useRef<HTMLDivElement>(null);
+  const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const datedProjects = projects.filter(
     (p) => p.start_date && p.estimated_end_date
@@ -83,7 +229,6 @@ export default function Timeline({ projects }: TimelineProps) {
     );
   }
 
-  // Group projects by employee
   const grouped: Record<string, Project[]> = {};
   for (const emp of EMPLOYEES) grouped[emp] = [];
   grouped["Ikke tildelt"] = [];
@@ -100,7 +245,6 @@ export default function Timeline({ projects }: TimelineProps) {
     (p) => !p.start_date || !p.estimated_end_date
   );
 
-  // Generate month labels
   const months: { label: string; x: number }[] = [];
   const cursor = new Date(rangeStart);
   while (cursor < rangeEnd) {
@@ -118,7 +262,6 @@ export default function Timeline({ projects }: TimelineProps) {
     projects.map((p) => [p.project_number, p])
   );
 
-  // Calculate rows - track group boundaries for alternating bg
   let currentY = 0;
   const rows: {
     project: Project;
@@ -173,7 +316,7 @@ export default function Timeline({ projects }: TimelineProps) {
 
   const totalHeight = Math.max(500, currentY + 20);
 
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+  const handleBarMouseMove = useCallback((e: React.MouseEvent) => {
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
     const scrollLeft = containerRef.current.scrollLeft;
@@ -184,11 +327,32 @@ export default function Timeline({ projects }: TimelineProps) {
     });
   }, []);
 
+  const handleBarEnter = useCallback((projectNumber: string, e: React.MouseEvent) => {
+    if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
+    setHoveredProject(projectNumber);
+    handleBarMouseMove(e);
+  }, [handleBarMouseMove]);
+
+  const handleBarLeave = useCallback(() => {
+    hoverTimeout.current = setTimeout(() => {
+      setHoveredProject(null);
+    }, 150);
+  }, []);
+
+  const handlePopupEnter = useCallback(() => {
+    if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
+  }, []);
+
+  const handlePopupLeave = useCallback(() => {
+    hoverTimeout.current = setTimeout(() => {
+      setHoveredProject(null);
+    }, 100);
+  }, []);
+
   const hoveredData = hoveredProject
     ? projects.find((p) => p.project_number === hoveredProject)
     : null;
 
-  // Dependency arrows (curved)
   const depArrows: {
     from: { x: number; y: number };
     to: { x: number; y: number };
@@ -225,7 +389,6 @@ export default function Timeline({ projects }: TimelineProps) {
         backgroundColor: "var(--card-bg)",
         minHeight: 500,
       }}
-      onMouseMove={handleMouseMove}
     >
       <div
         className="relative"
@@ -246,9 +409,7 @@ export default function Timeline({ projects }: TimelineProps) {
         >
           {months.map((m, i) => {
             const nextX =
-              i < months.length - 1
-                ? months[i + 1].x
-                : timelineWidth;
+              i < months.length - 1 ? months[i + 1].x : timelineWidth;
             return (
               <div
                 key={m.label}
@@ -269,7 +430,7 @@ export default function Timeline({ projects }: TimelineProps) {
           })}
         </div>
 
-        {/* Vertical gridlines for months */}
+        {/* Vertical gridlines */}
         {months.map((m) => (
           <div
             key={`grid-${m.label}`}
@@ -277,7 +438,6 @@ export default function Timeline({ projects }: TimelineProps) {
             style={{
               left: LEFT_COL + m.x,
               top: MONTH_HEADER,
-              bottom: 0,
               width: 1,
               height: totalHeight,
               background: "var(--divider)",
@@ -305,10 +465,9 @@ export default function Timeline({ projects }: TimelineProps) {
           </span>
         </div>
 
-        {/* Group sections with alternating rows */}
+        {/* Group headers */}
         {groupSections.map((section) => (
           <div key={section.label}>
-            {/* Group header */}
             <div
               className="absolute flex items-center gap-2.5 px-4"
               style={{
@@ -349,7 +508,9 @@ export default function Timeline({ projects }: TimelineProps) {
               right: 0,
               height: ROW_HEIGHT,
               backgroundColor:
-                row.indexInGroup % 2 === 1 ? "var(--surface)" : "transparent",
+                row.indexInGroup % 2 === 1
+                  ? "var(--surface)"
+                  : "transparent",
               minWidth: LEFT_COL + timelineWidth + 60,
             }}
           />
@@ -386,7 +547,8 @@ export default function Timeline({ projects }: TimelineProps) {
                 <span
                   className="ml-2 rounded-full px-2.5 py-0.5 text-[10px] font-semibold"
                   style={{
-                    backgroundColor: STATUS_COLORS_SOFT[p.status] || "#ddd",
+                    backgroundColor:
+                      STATUS_COLORS_SOFT[p.status] || "#ddd",
                     color: "#1a1a2e",
                   }}
                 >
@@ -397,7 +559,10 @@ export default function Timeline({ projects }: TimelineProps) {
           }
 
           const x = dateToX(p.start_date);
-          const width = Math.max(60, dateToX(p.estimated_end_date) - x);
+          const width = Math.max(
+            60,
+            dateToX(p.estimated_end_date) - x
+          );
           const isFerdig = p.status === "ferdig";
           const isHovered = hoveredProject === p.project_number;
 
@@ -411,12 +576,13 @@ export default function Timeline({ projects }: TimelineProps) {
                 height: ROW_HEIGHT,
               }}
             >
-              {/* Left label */}
               <div
                 className="truncate pl-4 pr-3 text-[12px] font-medium"
                 style={{
                   width: LEFT_COL,
-                  color: isFerdig ? "var(--muted-light)" : "var(--foreground)",
+                  color: isFerdig
+                    ? "var(--muted-light)"
+                    : "var(--foreground)",
                   textDecoration: isFerdig ? "line-through" : "none",
                 }}
               >
@@ -426,7 +592,6 @@ export default function Timeline({ projects }: TimelineProps) {
                 {p.name}
               </div>
 
-              {/* Bar */}
               <div
                 className={`absolute flex items-center gap-1.5 rounded-lg px-3 cursor-pointer transition-all duration-150 overflow-hidden whitespace-nowrap ${
                   isFerdig ? "bar-completed" : ""
@@ -436,7 +601,8 @@ export default function Timeline({ projects }: TimelineProps) {
                   width,
                   height: BAR_HEIGHT,
                   top: (ROW_HEIGHT - BAR_HEIGHT) / 2,
-                  backgroundColor: STATUS_COLORS[p.status] || "#ddd",
+                  backgroundColor:
+                    STATUS_COLORS[p.status] || "#ddd",
                   opacity: isFerdig ? 0.7 : 1,
                   boxShadow: isHovered
                     ? "0 2px 8px rgba(0,0,0,0.15)"
@@ -446,8 +612,11 @@ export default function Timeline({ projects }: TimelineProps) {
                     : "2px solid transparent",
                   color: textColorForStatus(p.status),
                 }}
-                onMouseEnter={() => setHoveredProject(p.project_number)}
-                onMouseLeave={() => setHoveredProject(null)}
+                onMouseEnter={(e) =>
+                  handleBarEnter(p.project_number, e)
+                }
+                onMouseMove={handleBarMouseMove}
+                onMouseLeave={handleBarLeave}
               >
                 <span className="text-[11px] font-medium opacity-60">
                   #{p.project_number}
@@ -460,7 +629,7 @@ export default function Timeline({ projects }: TimelineProps) {
           );
         })}
 
-        {/* Dependency arrows - curved SVG */}
+        {/* Dependency arrows */}
         <svg
           className="absolute pointer-events-none"
           style={{
@@ -484,14 +653,10 @@ export default function Timeline({ projects }: TimelineProps) {
           </defs>
           {depArrows.map((arrow, i) => {
             const midX = (arrow.from.x + arrow.to.x) / 2;
-            const cp1x = midX;
-            const cp1y = arrow.from.y;
-            const cp2x = midX;
-            const cp2y = arrow.to.y;
             return (
               <path
                 key={i}
-                d={`M ${arrow.from.x} ${arrow.from.y} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${arrow.to.x} ${arrow.to.y}`}
+                d={`M ${arrow.from.x} ${arrow.from.y} C ${midX} ${arrow.from.y}, ${midX} ${arrow.to.y}, ${arrow.to.x} ${arrow.to.y}`}
                 fill="none"
                 stroke="#9ca3af"
                 strokeWidth="1.5"
@@ -509,6 +674,8 @@ export default function Timeline({ projects }: TimelineProps) {
             x={popupPos.x}
             y={popupPos.y}
             projects={projects}
+            onMouseEnter={handlePopupEnter}
+            onMouseLeave={handlePopupLeave}
           />
         )}
       </div>
@@ -516,17 +683,26 @@ export default function Timeline({ projects }: TimelineProps) {
   );
 }
 
+// --- Hover popup with stage workflow ---
+
 function HoverPopup({
   project: p,
   x,
   y,
   projects,
+  onMouseEnter,
+  onMouseLeave,
 }: {
   project: Project;
   x: number;
   y: number;
   projects: Project[];
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
 }) {
+  const activeStage = getActiveStage(p.status);
+  const [viewingStage, setViewingStage] = useState<StageKey>(activeStage);
+
   const dep = p.dependency
     ? projects.find((pr) => pr.project_number === p.dependency)
     : null;
@@ -535,185 +711,298 @@ function HoverPopup({
       ? daysBetween(p.start_date, p.estimated_end_date)
       : null;
 
-  const allChecklistsDone =
-    p.checklists &&
+  const isFerdig = p.status === "ferdig";
+  const allChecklistsPassed =
+    !!p.checklists &&
     p.checklists.length > 0 &&
     p.checklists.every((c) => c.done === c.total);
+
   const showWarning =
-    p.status === "ferdig" &&
-    p.checklists &&
-    p.checklists.length > 0 &&
-    !allChecklistsDone;
+    isFerdig && p.checklists && p.checklists.length > 0 && !allChecklistsPassed;
+
+  const stages: StageKey[] = [1, 2, 3];
 
   return (
     <div
-      className="popup-enter absolute z-50 rounded-xl bg-[var(--card-bg)] p-5"
+      className="popup-enter absolute z-50 rounded-xl bg-[var(--card-bg)]"
       style={{
         left: x,
         top: y,
-        width: 360,
-        pointerEvents: "none",
+        width: 400,
         border: "1px solid var(--card-border)",
         boxShadow:
           "0 10px 40px rgba(0,0,0,0.12), 0 2px 10px rgba(0,0,0,0.08)",
       }}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
     >
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div>
-          <p
-            className="text-[11px] font-medium"
-            style={{ color: "var(--muted-light)" }}
-          >
-            #{p.project_number}
-          </p>
-          <p className="mt-0.5 text-[15px] font-bold text-gray-900 dark:text-gray-100">
-            {p.name}
-          </p>
-        </div>
-        <span
-          className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold"
-          style={{
-            backgroundColor: STATUS_COLORS_SOFT[p.status] || "#ddd",
-            color: "#1a1a2e",
-          }}
-        >
-          {STATUS_LABELS[p.status] || p.status}
-        </span>
-      </div>
-
-      {p.assigned && (
-        <div
-          className="mb-3 flex items-center gap-2 text-[13px]"
-          style={{ color: "var(--muted)" }}
-        >
+      {/* Top section */}
+      <div className="p-5 pb-0">
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <p
+              className="text-[11px] font-medium"
+              style={{ color: "var(--muted-light)" }}
+            >
+              #{p.project_number}
+            </p>
+            <p className="mt-0.5 text-[15px] font-bold text-gray-900 dark:text-gray-100">
+              {p.name}
+            </p>
+          </div>
           <span
-            className="h-3 w-3 rounded-full"
+            className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold"
             style={{
-              backgroundColor: EMPLOYEE_COLORS[p.assigned] || "#888",
+              backgroundColor: STATUS_COLORS_SOFT[p.status] || "#ddd",
+              color: "#1a1a2e",
             }}
-          />
-          <span className="font-medium">{p.assigned}</span>
-        </div>
-      )}
-
-      {dep && (
-        <p
-          className="mb-3 text-[12px]"
-          style={{ color: "var(--muted)" }}
-        >
-          Avhenger av{" "}
-          <span className="font-medium text-gray-700 dark:text-gray-300">
-            #{dep.project_number} {dep.name}
+          >
+            {STATUS_LABELS[p.status] || p.status}
           </span>
-          {dep.status !== "ferdig" && (
-            <span className="ml-1 font-semibold text-amber-600">
-              (ikke ferdig)
-            </span>
-          )}
-        </p>
-      )}
+        </div>
 
-      <div
-        className="mb-3 grid grid-cols-2 gap-x-6 gap-y-2 text-[12px]"
-        style={{ color: "var(--foreground)" }}
-      >
-        {p.start_date && (
-          <div>
-            <span style={{ color: "var(--muted-light)" }}>Start: </span>
-            {formatDate(p.start_date)}
+        {p.assigned && (
+          <div
+            className="mb-3 flex items-center gap-2 text-[13px]"
+            style={{ color: "var(--muted)" }}
+          >
+            <span
+              className="h-3 w-3 rounded-full"
+              style={{
+                backgroundColor:
+                  EMPLOYEE_COLORS[p.assigned] || "#888",
+              }}
+            />
+            <span className="font-medium">{p.assigned}</span>
           </div>
         )}
-        {p.estimated_end_date && (
-          <div>
-            <span style={{ color: "var(--muted-light)" }}>Slutt: </span>
-            {formatDate(p.estimated_end_date)}
-          </div>
+
+        {dep && (
+          <p
+            className="mb-3 text-[12px]"
+            style={{ color: "var(--muted)" }}
+          >
+            Avhenger av{" "}
+            <span className="font-medium text-gray-700 dark:text-gray-300">
+              #{dep.project_number} {dep.name}
+            </span>
+            {dep.status !== "ferdig" && (
+              <span className="ml-1 font-semibold text-amber-600">
+                (ikke ferdig)
+              </span>
+            )}
+          </p>
         )}
-        {p.agreed_price != null && (
-          <div>
-            <span style={{ color: "var(--muted-light)" }}>Pris: </span>
-            {formatPrice(p.agreed_price)}
-          </div>
-        )}
-        {duration != null && (
-          <div>
-            <span style={{ color: "var(--muted-light)" }}>Varighet: </span>
-            {duration} dager
-          </div>
-        )}
+
+        <div
+          className="mb-4 grid grid-cols-2 gap-x-6 gap-y-2 text-[12px]"
+          style={{ color: "var(--foreground)" }}
+        >
+          {p.start_date && (
+            <div>
+              <span style={{ color: "var(--muted-light)" }}>
+                Start:{" "}
+              </span>
+              {formatDate(p.start_date)}
+            </div>
+          )}
+          {p.estimated_end_date && (
+            <div>
+              <span style={{ color: "var(--muted-light)" }}>
+                Slutt:{" "}
+              </span>
+              {formatDate(p.estimated_end_date)}
+            </div>
+          )}
+          {p.agreed_price != null && (
+            <div>
+              <span style={{ color: "var(--muted-light)" }}>
+                Pris:{" "}
+              </span>
+              {formatPrice(p.agreed_price)}
+            </div>
+          )}
+          {duration != null && (
+            <div>
+              <span style={{ color: "var(--muted-light)" }}>
+                Varighet:{" "}
+              </span>
+              {duration} dager
+            </div>
+          )}
+        </div>
       </div>
 
-      {p.checklists && p.checklists.length > 0 && (
-        <div
-          className="mt-3 space-y-2.5 pt-3"
-          style={{ borderTop: "1px solid var(--divider)" }}
-        >
+      {/* Stage workflow */}
+      <div
+        className="px-5 pt-4 pb-2"
+        style={{ borderTop: "1px solid var(--divider)" }}
+      >
+        {/* 3 stage indicators */}
+        <div className="flex items-center justify-between mb-4">
+          {stages.map((s, i) => {
+            const state = getStageState(
+              s,
+              activeStage,
+              allChecklistsPassed,
+              isFerdig
+            );
+            const isViewing = viewingStage === s;
+
+            let circleBg: string;
+            let circleBorder: string;
+            let circleText: string;
+
+            if (state === "completed") {
+              circleBg = "#22c55e";
+              circleBorder = "#22c55e";
+              circleText = "#fff";
+            } else if (state === "active") {
+              circleBg = STATUS_COLORS[p.status] || "#9ca3af";
+              circleBorder = STATUS_COLORS[p.status] || "#9ca3af";
+              circleText = "#1a1a2e";
+            } else {
+              circleBg = "transparent";
+              circleBorder = "#d1d5db";
+              circleText = "#9ca3af";
+            }
+
+            return (
+              <div key={s} className="flex items-center" style={{ flex: 1 }}>
+                <button
+                  className="flex flex-col items-center gap-1 flex-1 cursor-pointer group"
+                  onClick={() => setViewingStage(s)}
+                >
+                  <div
+                    className="flex items-center justify-center rounded-full text-[12px] font-bold transition-all duration-150"
+                    style={{
+                      width: 28,
+                      height: 28,
+                      backgroundColor: circleBg,
+                      border: `2px solid ${circleBorder}`,
+                      color: circleText,
+                      boxShadow: isViewing
+                        ? "0 0 0 3px rgba(55,138,221,0.25)"
+                        : "none",
+                    }}
+                  >
+                    {state === "completed" ? "\u2713" : s}
+                  </div>
+                  <span
+                    className="text-[11px] font-medium transition-colors"
+                    style={{
+                      color: isViewing
+                        ? "var(--foreground)"
+                        : "var(--muted-light)",
+                    }}
+                  >
+                    {STAGE_LABELS[s]}
+                  </span>
+                </button>
+
+                {/* Arrow connector */}
+                {i < 2 && (
+                  <span
+                    className="text-[14px] font-light mx-0.5 -mt-4"
+                    style={{ color: "var(--muted-light)" }}
+                  >
+                    &rarr;
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Items for the viewed stage */}
+        <div className="mb-3">
           <p
-            className="text-[10px] font-semibold uppercase"
+            className="text-[10px] font-semibold uppercase mb-2"
             style={{
               color: "var(--muted-light)",
               letterSpacing: "0.05em",
             }}
           >
-            Sjekklister
+            {viewingStage}. {STAGE_LABELS[viewingStage]}
           </p>
-          {p.checklists.map((c) => (
-            <ChecklistRow key={c.name} checklist={c} />
-          ))}
-        </div>
-      )}
 
+          <div className="space-y-0">
+            {STAGE_ITEMS[viewingStage].map((item, idx) => {
+              const done = isItemComplete(
+                viewingStage,
+                idx,
+                activeStage,
+                p.checklists,
+                isFerdig,
+                allChecklistsPassed
+              );
+              const linked = getChecklistForItem(
+                viewingStage,
+                idx,
+                p.checklists
+              );
+
+              return (
+                <div
+                  key={item}
+                  className="flex items-center gap-2.5"
+                  style={{ height: 24 }}
+                >
+                  {done ? (
+                    <span
+                      className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white"
+                      style={{ backgroundColor: "#22c55e" }}
+                    >
+                      &#x2713;
+                    </span>
+                  ) : (
+                    <span
+                      className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full"
+                      style={{
+                        border: "1.5px solid #d1d5db",
+                      }}
+                    />
+                  )}
+                  <span
+                    className="text-[13px]"
+                    style={{
+                      color: done
+                        ? "var(--muted-light)"
+                        : "var(--foreground)",
+                      textDecoration: done
+                        ? "line-through"
+                        : "none",
+                      fontWeight: done ? 400 : 400,
+                    }}
+                  >
+                    {item}
+                  </span>
+                  {linked && (
+                    <span
+                      className="ml-auto text-[10px] font-medium"
+                      style={{ color: "var(--muted-light)" }}
+                    >
+                      {linked.done}/{linked.total}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Warning banner */}
       {showWarning && (
-        <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2.5 text-[11px] font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+        <div
+          className="mx-5 mb-4 rounded-lg bg-amber-50 px-3 py-2.5 text-[11px] font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+        >
           Sjekklister m&aring; godkjennes f&oslash;r prosjektet kan lukkes
         </div>
       )}
-    </div>
-  );
-}
 
-function ChecklistRow({ checklist }: { checklist: Checklist }) {
-  const ratio =
-    checklist.total > 0 ? checklist.done / checklist.total : 0;
-  let bg: string, icon: string;
-  if (ratio === 1) {
-    bg = "#22c55e";
-    icon = "\u2713";
-  } else if (ratio > 0) {
-    bg = "#f59e0b";
-    icon = "!";
-  } else {
-    bg = "#ef4444";
-    icon = "!";
-  }
-
-  return (
-    <div className="flex items-center gap-2.5 text-[12px]">
-      <span
-        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
-        style={{ backgroundColor: bg }}
-      >
-        {icon}
-      </span>
-      <span className="shrink-0 font-medium text-gray-700 dark:text-gray-300">
-        {checklist.name}
-      </span>
-      <div className="flex-1 h-1.5 min-w-[48px] overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-        <div
-          className="h-full rounded-full transition-all"
-          style={{
-            width: `${ratio * 100}%`,
-            backgroundColor: bg,
-            height: 6,
-          }}
-        />
-      </div>
-      <span
-        className="shrink-0 text-[11px] font-medium"
-        style={{ color: "var(--muted)" }}
-      >
-        {checklist.done}/{checklist.total}
-      </span>
+      {/* Bottom padding */}
+      <div style={{ height: 4 }} />
     </div>
   );
 }
