@@ -240,21 +240,19 @@ export default function Timeline({ projects }: TimelineProps) {
   const minDate = allDates.sort()[0];
   const maxDate = allDates.sort().reverse()[0];
 
+  // Tight range: start of earliest month → latest date + 14 days
   const rangeStart = new Date(minDate);
   rangeStart.setDate(1);
   const rangeEnd = new Date(maxDate);
-  rangeEnd.setMonth(rangeEnd.getMonth() + 1);
-  rangeEnd.setDate(rangeEnd.getDate() + 15);
+  rangeEnd.setDate(rangeEnd.getDate() + 14);
 
-  const totalDays = daysBetween(
-    rangeStart.toISOString().split("T")[0],
-    rangeEnd.toISOString().split("T")[0]
-  );
-  const dayWidth = Math.max(10, 1000 / totalDays);
-  const timelineWidth = totalDays * dayWidth;
+  const rangeStartStr = rangeStart.toISOString().split("T")[0];
+  const rangeEndStr = rangeEnd.toISOString().split("T")[0];
+  const totalDays = daysBetween(rangeStartStr, rangeEndStr);
 
-  function dateToX(date: string) {
-    return daysBetween(rangeStart.toISOString().split("T")[0], date) * dayWidth;
+  // Returns percentage (0–100) of timeline width
+  function dateToPct(date: string) {
+    return (daysBetween(rangeStartStr, date) / totalDays) * 100;
   }
 
   // Group by employee
@@ -267,18 +265,19 @@ export default function Timeline({ projects }: TimelineProps) {
   }
   const undated = projects.filter((p) => !p.start_date || !p.estimated_end_date);
 
-  // Month labels
-  const months: { label: string; x: number }[] = [];
+  // Month labels (only months that overlap with the range)
+  const months: { label: string; pct: number }[] = [];
   const cur = new Date(rangeStart);
   while (cur < rangeEnd) {
+    const d = cur.toISOString().split("T")[0];
     months.push({
       label: cur.toLocaleDateString("nb-NO", { month: "short", year: "numeric" }),
-      x: dateToX(cur.toISOString().split("T")[0]),
+      pct: dateToPct(d),
     });
     cur.setMonth(cur.getMonth() + 1);
   }
 
-  const todayX = dateToX(today);
+  const todayPct = dateToPct(today);
   const projectByNumber = new Map(projects.map((p) => [p.project_number, p]));
 
   // Layout rows
@@ -355,8 +354,8 @@ export default function Timeline({ projects }: TimelineProps) {
     ? projects.find((p) => p.project_number === hoveredProject)
     : null;
 
-  // Dependency arrows
-  const depArrows: { from: { x: number; y: number }; to: { x: number; y: number } }[] = [];
+  // Dependency arrows (pct-based x, pixel y)
+  const depArrows: { from: { pct: number; y: number }; to: { pct: number; y: number } }[] = [];
   for (const row of rows) {
     if (row.project.dependency) {
       const dep = projectByNumber.get(row.project.dependency);
@@ -364,15 +363,18 @@ export default function Timeline({ projects }: TimelineProps) {
         const depRow = rows.find((r) => r.project.project_number === dep.project_number);
         if (depRow) {
           depArrows.push({
-            from: { x: dateToX(dep.estimated_end_date), y: depRow.y + ROW_HEIGHT / 2 },
-            to: { x: dateToX(row.project.start_date), y: row.y + ROW_HEIGHT / 2 },
+            from: { pct: dateToPct(dep.estimated_end_date), y: depRow.y + ROW_HEIGHT / 2 },
+            to: { pct: dateToPct(row.project.start_date), y: row.y + ROW_HEIGHT / 2 },
           });
         }
       }
     }
   }
 
-  const fullWidth = LEFT_COL + timelineWidth + 40;
+  // The timeline area (right of LEFT_COL) uses percentages.
+  // We use a CSS calc approach: the timeline area = 100% - LEFT_COL.
+  // A bar at dateToPct(x)% starts at `calc(${LEFT_COL}px + ${pct}% * (100% - ${LEFT_COL}px))`
+  // Simplify by using a nested relative container for the timeline area.
 
   return (
     <div
@@ -384,110 +386,111 @@ export default function Timeline({ projects }: TimelineProps) {
         minHeight: 500,
       }}
     >
-      <div className="relative" style={{ minWidth: fullWidth, height: totalHeight + MONTH_BAR }}>
+      <div className="relative" style={{ height: totalHeight + MONTH_BAR }}>
 
         {/* ── Month header bar ── */}
         <div
-          className="sticky top-0 z-10"
+          className="sticky top-0 z-10 flex"
           style={{
             height: MONTH_BAR,
             borderBottom: "1px solid var(--divider)",
             backgroundColor: "var(--card-bg)",
           }}
         >
-          {/* "I dag" pill — above month bar */}
-          <div
-            className="absolute z-30 -translate-x-1/2"
-            style={{ left: LEFT_COL + todayX, top: 4 }}
-          >
-            <span
-              className="rounded-full px-2 py-0.5 text-[9px] font-semibold"
-              style={{ backgroundColor: "#E8655020", color: "#E06050" }}
-            >
-              I dag
-            </span>
-          </div>
-
-          {months.map((m, i) => {
-            const nextX = i < months.length - 1 ? months[i + 1].x : timelineWidth;
-            return (
-              <div
-                key={m.label}
-                className="absolute flex items-end pb-2.5 pl-2"
-                style={{
-                  left: LEFT_COL + m.x,
-                  width: nextX - m.x,
-                  top: 0,
-                  height: MONTH_BAR,
-                }}
-              >
-                <span
-                  className="text-[11px] font-medium"
-                  style={{ color: "var(--muted-light)", letterSpacing: "0.03em" }}
-                >
-                  {m.label}
-                </span>
-              </div>
-            );
-          })}
-
           {/* Left column header */}
           <div
-            className="absolute flex items-end pb-2.5 pl-4 text-[11px] font-medium"
+            className="shrink-0 flex items-end pb-2.5 pl-4 text-[11px] font-medium"
             style={{
-              left: 0,
-              top: 0,
               width: LEFT_COL,
-              height: MONTH_BAR,
               color: "var(--muted-light)",
               borderRight: "1px solid var(--divider)",
             }}
           >
             Prosjekt
           </div>
+
+          {/* Timeline header area (months + I dag pill) */}
+          <div className="relative flex-1">
+            {/* "I dag" pill */}
+            <div
+              className="absolute z-30 -translate-x-1/2"
+              style={{ left: `${todayPct}%`, top: 4 }}
+            >
+              <span
+                className="rounded-full px-2 py-0.5 text-[9px] font-semibold whitespace-nowrap"
+                style={{ backgroundColor: "#E8655020", color: "#E06050" }}
+              >
+                I dag
+              </span>
+            </div>
+
+            {months.map((m, i) => {
+              const nextPct = i < months.length - 1 ? months[i + 1].pct : 100;
+              return (
+                <div
+                  key={m.label}
+                  className="absolute flex items-end pb-2.5 pl-2"
+                  style={{
+                    left: `${m.pct}%`,
+                    width: `${nextPct - m.pct}%`,
+                    top: 0,
+                    height: MONTH_BAR,
+                  }}
+                >
+                  <span
+                    className="text-[11px] font-medium whitespace-nowrap"
+                    style={{ color: "var(--muted-light)", letterSpacing: "0.03em" }}
+                  >
+                    {m.label}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
-        {/* ── Vertical gridlines (very subtle) ── */}
-        {months.map((m) => (
+        {/* ── Body: left column + timeline area ── */}
+        <div className="absolute flex" style={{ top: MONTH_BAR, left: 0, right: 0, height: totalHeight }}>
+
+          {/* Left column area (for border) */}
           <div
-            key={`g-${m.label}`}
-            className="absolute pointer-events-none"
-            style={{
-              left: LEFT_COL + m.x,
-              top: MONTH_BAR,
-              width: 1,
-              height: totalHeight,
-              backgroundColor: "#F0F0F0",
-            }}
+            className="shrink-0 relative"
+            style={{ width: LEFT_COL, borderRight: "1px solid var(--divider)" }}
           />
-        ))}
 
-        {/* ── Left column vertical border ── */}
-        <div
-          className="absolute pointer-events-none"
-          style={{
-            left: LEFT_COL,
-            top: MONTH_BAR,
-            width: 1,
-            height: totalHeight,
-            backgroundColor: "var(--divider)",
-          }}
-        />
+          {/* Timeline area (gridlines, today line, bars) */}
+          <div className="relative flex-1">
+            {/* Vertical gridlines */}
+            {months.map((m) => (
+              <div
+                key={`g-${m.label}`}
+                className="absolute pointer-events-none"
+                style={{
+                  left: `${m.pct}%`,
+                  top: 0,
+                  width: 1,
+                  height: totalHeight,
+                  backgroundColor: "#F0F0F0",
+                }}
+              />
+            ))}
 
-        {/* ── "I dag" line ── */}
-        <div
-          className="absolute z-20 pointer-events-none"
-          style={{
-            left: LEFT_COL + todayX,
-            top: MONTH_BAR,
-            width: 1,
-            height: totalHeight,
-            backgroundColor: "#E06050",
-            opacity: 0.6,
-          }}
-        />
+            {/* "I dag" line */}
+            <div
+              className="absolute z-20 pointer-events-none"
+              style={{
+                left: `${todayPct}%`,
+                top: 0,
+                width: 1,
+                height: totalHeight,
+                backgroundColor: "#E06050",
+                opacity: 0.6,
+              }}
+            />
+          </div>
+        </div>
 
-        {/* ── Employee headers ── */}
+        {/* ── Employee headers (full width) ── */}
         {headers.map((h) => (
           <div
             key={h.label}
@@ -495,8 +498,8 @@ export default function Timeline({ projects }: TimelineProps) {
             style={{
               top: MONTH_BAR + h.y,
               left: 0,
+              right: 0,
               height: EMP_HEADER,
-              minWidth: fullWidth,
               backgroundColor: "var(--card-bg)",
               borderBottom: "1px solid var(--divider)",
             }}
@@ -522,8 +525,8 @@ export default function Timeline({ projects }: TimelineProps) {
             style={{
               top: MONTH_BAR + row.y,
               left: 0,
+              right: 0,
               height: ROW_HEIGHT,
-              minWidth: fullWidth,
               backgroundColor: row.indexInGroup % 2 === 1 ? "var(--row-alt)" : "var(--card-bg)",
             }}
           />
@@ -533,7 +536,6 @@ export default function Timeline({ projects }: TimelineProps) {
         {rows.map((row) => {
           const p = row.project;
 
-          // Undated
           if (!p.start_date || !p.estimated_end_date) {
             return (
               <div
@@ -558,8 +560,9 @@ export default function Timeline({ projects }: TimelineProps) {
             );
           }
 
-          const x = dateToX(p.start_date);
-          const w = Math.max(50, dateToX(p.estimated_end_date) - x);
+          const startPct = dateToPct(p.start_date);
+          const endPct = dateToPct(p.estimated_end_date);
+          const widthPct = Math.max(2, endPct - startPct);
           const isFerdig = p.status === "ferdig";
           const isHovered = hoveredProject === p.project_number;
           const bs = getBarStyle(p, today);
@@ -568,11 +571,11 @@ export default function Timeline({ projects }: TimelineProps) {
             <div
               key={p.project_number}
               className="absolute flex items-center"
-              style={{ top: MONTH_BAR + row.y, left: 0, height: ROW_HEIGHT }}
+              style={{ top: MONTH_BAR + row.y, left: 0, right: 0, height: ROW_HEIGHT }}
             >
               {/* Left label */}
               <div
-                className="truncate pl-4 pr-3 text-[12px]"
+                className="shrink-0 truncate pl-4 pr-3 text-[12px]"
                 style={{ width: LEFT_COL }}
               >
                 <span style={{ color: "var(--muted-light)", fontWeight: 400 }}>
@@ -589,65 +592,77 @@ export default function Timeline({ projects }: TimelineProps) {
                 </span>
               </div>
 
-              {/* Bar — name only, no # duplicate */}
-              <div
-                className="absolute flex items-center gap-1.5 px-2.5 cursor-pointer transition-shadow duration-100 overflow-hidden whitespace-nowrap"
-                style={{
-                  left: LEFT_COL + x,
-                  width: w,
-                  height: BAR_HEIGHT,
-                  top: (ROW_HEIGHT - BAR_HEIGHT) / 2,
-                  backgroundColor: bs.bg,
-                  border: isHovered ? `1px solid rgba(0,0,0,0.25)` : bs.border,
-                  borderRadius: 6,
-                  color: bs.textColor,
-                  boxShadow: isHovered ? "0 2px 8px rgba(0,0,0,0.10)" : "none",
-                }}
-                onMouseEnter={(e) => handleBarEnter(p.project_number, e)}
-                onMouseMove={handleBarMouseMove}
-                onMouseLeave={handleBarLeave}
-              >
-                <span className="text-[11px] font-medium truncate">{p.name}</span>
-                {bs.showStatusPill && (
-                  <span
-                    className="ml-auto shrink-0 rounded-full px-1.5 py-px text-[9px] font-medium"
-                    style={{
-                      backgroundColor: STATUS_COLORS_SOFT[p.status] || "#eee",
-                      color: "#555",
-                    }}
-                  >
-                    {STATUS_LABELS[p.status] || p.status}
-                  </span>
-                )}
+              {/* Timeline area for this row */}
+              <div className="relative flex-1" style={{ height: ROW_HEIGHT }}>
+                <div
+                  className="absolute flex items-center gap-1.5 px-2.5 cursor-pointer transition-shadow duration-100 overflow-hidden whitespace-nowrap"
+                  style={{
+                    left: `${startPct}%`,
+                    width: `${widthPct}%`,
+                    height: BAR_HEIGHT,
+                    top: (ROW_HEIGHT - BAR_HEIGHT) / 2,
+                    backgroundColor: bs.bg,
+                    border: isHovered ? "1px solid rgba(0,0,0,0.25)" : bs.border,
+                    borderRadius: 6,
+                    color: bs.textColor,
+                    boxShadow: isHovered ? "0 2px 8px rgba(0,0,0,0.10)" : "none",
+                    minWidth: 24,
+                  }}
+                  onMouseEnter={(e) => handleBarEnter(p.project_number, e)}
+                  onMouseMove={handleBarMouseMove}
+                  onMouseLeave={handleBarLeave}
+                >
+                  <span className="text-[11px] font-medium truncate">{p.name}</span>
+                  {bs.showStatusPill && (
+                    <span
+                      className="ml-auto shrink-0 rounded-full px-1.5 py-px text-[9px] font-medium"
+                      style={{
+                        backgroundColor: STATUS_COLORS_SOFT[p.status] || "#eee",
+                        color: "#555",
+                      }}
+                    >
+                      {STATUS_LABELS[p.status] || p.status}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           );
         })}
 
-        {/* ── Dependency arrows ── */}
-        <svg
+        {/* ── Dependency arrows (SVG overlay on timeline area, viewBox 0-100 for x) ── */}
+        <div
           className="absolute pointer-events-none"
-          style={{ left: LEFT_COL, top: MONTH_BAR, width: timelineWidth, height: totalHeight }}
+          style={{ left: LEFT_COL, top: MONTH_BAR, right: 0, height: totalHeight }}
         >
-          <defs>
-            <marker id="arr" markerWidth="6" markerHeight="5" refX="5" refY="2.5" orient="auto">
-              <path d="M0,0 L6,2.5 L0,5 Z" fill="#BBB" />
-            </marker>
-          </defs>
-          {depArrows.map((a, i) => {
-            const mx = (a.from.x + a.to.x) / 2;
-            return (
-              <path
-                key={i}
-                d={`M${a.from.x},${a.from.y} C${mx},${a.from.y} ${mx},${a.to.y} ${a.to.x},${a.to.y}`}
-                fill="none"
-                stroke="#BBB"
-                strokeWidth="1"
-                markerEnd="url(#arr)"
-              />
-            );
-          })}
-        </svg>
+          <svg
+            width="100%"
+            height="100%"
+            viewBox={`0 0 100 ${totalHeight}`}
+            preserveAspectRatio="none"
+            style={{ overflow: "visible" }}
+          >
+            <defs>
+              <marker id="arr" markerWidth="6" markerHeight="5" refX="5" refY="2.5" orient="auto" markerUnits="userSpaceOnUse">
+                <path d="M0,0 L6,2.5 L0,5 Z" fill="#BBB" />
+              </marker>
+            </defs>
+            {depArrows.map((a, i) => {
+              const mx = (a.from.pct + a.to.pct) / 2;
+              return (
+                <path
+                  key={i}
+                  d={`M${a.from.pct},${a.from.y} C${mx},${a.from.y} ${mx},${a.to.y} ${a.to.pct},${a.to.y}`}
+                  fill="none"
+                  stroke="#BBB"
+                  strokeWidth="1"
+                  vectorEffect="non-scaling-stroke"
+                  markerEnd="url(#arr)"
+                />
+              );
+            })}
+          </svg>
+        </div>
 
       </div>
 
