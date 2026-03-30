@@ -3,7 +3,6 @@
 import { useState, useRef, useCallback } from "react";
 import type { Project, Checklist } from "@/lib/types";
 import {
-  STATUS_COLORS,
   STATUS_COLORS_SOFT,
   STATUS_LABELS,
   EMPLOYEE_COLORS,
@@ -19,6 +18,7 @@ const ROW_HEIGHT = 52;
 const BAR_HEIGHT = 32;
 const HEADER_HEIGHT = 40;
 const MONTH_HEADER = 44;
+const GROUP_GAP = 16;
 
 function daysBetween(a: string, b: string) {
   return Math.round(
@@ -42,9 +42,85 @@ function formatPrice(n: number) {
   }).format(n);
 }
 
-function textColorForStatus(status: string): string {
-  void status;
-  return "#1a1a2e";
+// --- Traffic light bar colors ---
+
+interface BarStyle {
+  bg: string;
+  textColor: string;
+  border: string;
+  isDashed: boolean;
+  useHatching: boolean;
+}
+
+function getBarStyle(p: Project, today: string): BarStyle {
+  // GRAY: completed
+  if (p.status === "ferdig") {
+    return {
+      bg: "#B0B0B0",
+      textColor: "#4a4a4a",
+      border: "2px solid transparent",
+      isDashed: false,
+      useHatching: true,
+    };
+  }
+
+  // WHITE: future / not started
+  if (
+    p.status === "innkommende" ||
+    p.status === "planlegging" ||
+    (p.start_date && p.start_date > today)
+  ) {
+    return {
+      bg: "#ffffff",
+      textColor: "#4a4a4a",
+      border: "2px dashed #c4c4c4",
+      isDashed: true,
+      useHatching: false,
+    };
+  }
+
+  // RED: overdue or checklist failures
+  const isOverdue =
+    p.estimated_end_date && p.estimated_end_date < today && p.status !== "ferdig";
+  const hasChecklistFailure =
+    p.checklists &&
+    p.checklists.length > 0 &&
+    p.checklists.some((c) => c.total > 0 && c.done < c.total * 0.5);
+
+  if (isOverdue || hasChecklistFailure) {
+    return {
+      bg: "#F09595",
+      textColor: "#ffffff",
+      border: "2px solid transparent",
+      isDashed: false,
+      useHatching: false,
+    };
+  }
+
+  // YELLOW: venter kunde, or deadline within 5 days
+  const nearDeadline =
+    p.estimated_end_date &&
+    daysBetween(today, p.estimated_end_date) <= 5 &&
+    daysBetween(today, p.estimated_end_date) >= 0;
+
+  if (p.status === "venter kunde" || nearDeadline) {
+    return {
+      bg: "#FAC775",
+      textColor: "#ffffff",
+      border: "2px solid transparent",
+      isDashed: false,
+      useHatching: false,
+    };
+  }
+
+  // GREEN: active and on track
+  return {
+    bg: "#9FE1CB",
+    textColor: "#ffffff",
+    border: "2px solid transparent",
+    isDashed: false,
+    useHatching: false,
+  };
 }
 
 // --- Stage workflow logic ---
@@ -112,16 +188,10 @@ function isItemComplete(
   isFerdig: boolean,
   allChecklistsPassed: boolean
 ): boolean {
-  // If ferdig and all checklists passed, everything is done
   if (isFerdig && allChecklistsPassed) return true;
-
-  // Past stages: all items complete
   if (stageKey < activeStage) return true;
-
-  // Future stages: nothing complete
   if (stageKey > activeStage) return false;
 
-  // Current stage: check specific items against checklists
   const cls = checklists || [];
 
   if (stageKey === 2) {
@@ -173,23 +243,48 @@ function getChecklistForItem(
   const cls = checklists || [];
   if (stageKey === 2) {
     if (itemIndex === 0)
-      return cls.find((c) => c.name.toLowerCase().includes("vernerunde")) || null;
+      return (
+        cls.find((c) => c.name.toLowerCase().includes("vernerunde")) ||
+        null
+      );
     if (itemIndex === 2)
-      return cls.find((c) => c.name.toLowerCase().includes("kvalitetskontroll")) || null;
+      return (
+        cls.find((c) =>
+          c.name.toLowerCase().includes("kvalitetskontroll")
+        ) || null
+      );
   }
   if (stageKey === 3) {
     if (itemIndex === 0)
-      return cls.find((c) => c.name.toLowerCase().includes("kvalitetskontroll")) || null;
+      return (
+        cls.find((c) =>
+          c.name.toLowerCase().includes("kvalitetskontroll")
+        ) || null
+      );
     if (itemIndex === 1)
-      return cls.find((c) => c.name.toLowerCase().includes("ferdigstillelse")) || null;
+      return (
+        cls.find((c) =>
+          c.name.toLowerCase().includes("ferdigstillelse")
+        ) || null
+      );
   }
   return null;
+}
+
+// Helper to produce 10% opacity of a hex color
+function colorAt10(hex: string): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},0.10)`;
 }
 
 // --- Main component ---
 
 export default function Timeline({ projects }: TimelineProps) {
-  const [hoveredProject, setHoveredProject] = useState<string | null>(null);
+  const [hoveredProject, setHoveredProject] = useState<string | null>(
+    null
+  );
   const [popupPos, setPopupPos] = useState<{ x: number; y: number }>({
     x: 0,
     y: 0,
@@ -262,7 +357,9 @@ export default function Timeline({ projects }: TimelineProps) {
     projects.map((p) => [p.project_number, p])
   );
 
+  // Calculate rows with GROUP_GAP between sections
   let currentY = 0;
+  let sectionIndex = 0;
   const rows: {
     project: Project;
     y: number;
@@ -274,11 +371,16 @@ export default function Timeline({ projects }: TimelineProps) {
     color: string;
     y: number;
     height: number;
+    isFirst: boolean;
   }[] = [];
 
-  for (const emp of [...EMPLOYEES, "Ikke tildelt"]) {
+  const allGroups = [...EMPLOYEES, "Ikke tildelt"];
+  for (const emp of allGroups) {
     const group = grouped[emp];
     if (group.length === 0 && emp !== "Ikke tildelt") continue;
+
+    // Add gap before each group except the first
+    if (sectionIndex > 0) currentY += GROUP_GAP;
 
     const sectionStart = currentY;
     currentY += HEADER_HEIGHT;
@@ -291,10 +393,13 @@ export default function Timeline({ projects }: TimelineProps) {
       color: EMPLOYEE_COLORS[emp] || "#888780",
       y: sectionStart,
       height: currentY - sectionStart,
+      isFirst: sectionIndex === 0,
     });
+    sectionIndex++;
   }
 
   if (undated.length > 0) {
+    if (sectionIndex > 0) currentY += GROUP_GAP;
     const sectionStart = currentY;
     currentY += HEADER_HEIGHT;
     undated.forEach((p, idx) => {
@@ -311,27 +416,34 @@ export default function Timeline({ projects }: TimelineProps) {
       color: "#888780",
       y: sectionStart,
       height: currentY - sectionStart,
+      isFirst: sectionIndex === 0,
     });
   }
 
   const totalHeight = Math.max(500, currentY + 20);
 
-  const handleBarMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const scrollLeft = containerRef.current.scrollLeft;
-    const scrollTop = containerRef.current.scrollTop;
-    setPopupPos({
-      x: e.clientX - rect.left + scrollLeft + 20,
-      y: e.clientY - rect.top + scrollTop - 12,
-    });
-  }, []);
+  const handleBarMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const scrollLeft = containerRef.current.scrollLeft;
+      const scrollTop = containerRef.current.scrollTop;
+      setPopupPos({
+        x: e.clientX - rect.left + scrollLeft + 20,
+        y: e.clientY - rect.top + scrollTop - 12,
+      });
+    },
+    []
+  );
 
-  const handleBarEnter = useCallback((projectNumber: string, e: React.MouseEvent) => {
-    if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
-    setHoveredProject(projectNumber);
-    handleBarMouseMove(e);
-  }, [handleBarMouseMove]);
+  const handleBarEnter = useCallback(
+    (projectNumber: string, e: React.MouseEvent) => {
+      if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
+      setHoveredProject(projectNumber);
+      handleBarMouseMove(e);
+    },
+    [handleBarMouseMove]
+  );
 
   const handleBarLeave = useCallback(() => {
     hoverTimeout.current = setTimeout(() => {
@@ -465,9 +577,10 @@ export default function Timeline({ projects }: TimelineProps) {
           </span>
         </div>
 
-        {/* Group headers */}
+        {/* Employee group sections */}
         {groupSections.map((section) => (
           <div key={section.label}>
+            {/* Group header with employee color tint background + top border */}
             <div
               className="absolute flex items-center gap-2.5 px-4"
               style={{
@@ -475,13 +588,17 @@ export default function Timeline({ projects }: TimelineProps) {
                 left: 0,
                 right: 0,
                 height: HEADER_HEIGHT,
-                backgroundColor: "var(--surface)",
+                backgroundColor: colorAt10(section.color),
                 borderLeft: `3px solid ${section.color}`,
+                borderTop: section.isFirst
+                  ? "none"
+                  : `3px solid ${section.color}`,
                 borderBottom: "1px solid var(--divider)",
+                minWidth: LEFT_COL + timelineWidth + 60,
               }}
             >
               <span
-                className="h-2 w-2 rounded-full"
+                className="h-2.5 w-2.5 rounded-full"
                 style={{ backgroundColor: section.color }}
               />
               <span
@@ -510,7 +627,7 @@ export default function Timeline({ projects }: TimelineProps) {
               backgroundColor:
                 row.indexInGroup % 2 === 1
                   ? "var(--surface)"
-                  : "transparent",
+                  : "var(--card-bg)",
               minWidth: LEFT_COL + timelineWidth + 60,
             }}
           />
@@ -565,6 +682,7 @@ export default function Timeline({ projects }: TimelineProps) {
           );
           const isFerdig = p.status === "ferdig";
           const isHovered = hoveredProject === p.project_number;
+          const barStyle = getBarStyle(p, today);
 
           return (
             <div
@@ -594,23 +712,21 @@ export default function Timeline({ projects }: TimelineProps) {
 
               <div
                 className={`absolute flex items-center gap-1.5 rounded-lg px-3 cursor-pointer transition-all duration-150 overflow-hidden whitespace-nowrap ${
-                  isFerdig ? "bar-completed" : ""
+                  barStyle.useHatching ? "bar-completed" : ""
                 }`}
                 style={{
                   left: LEFT_COL + x,
                   width,
                   height: BAR_HEIGHT,
                   top: (ROW_HEIGHT - BAR_HEIGHT) / 2,
-                  backgroundColor:
-                    STATUS_COLORS[p.status] || "#ddd",
-                  opacity: isFerdig ? 0.7 : 1,
+                  backgroundColor: barStyle.bg,
+                  border: isHovered
+                    ? "2px solid rgba(0,0,0,0.3)"
+                    : barStyle.border,
+                  color: barStyle.textColor,
                   boxShadow: isHovered
                     ? "0 2px 8px rgba(0,0,0,0.15)"
                     : "0 1px 2px rgba(0,0,0,0.05)",
-                  border: isHovered
-                    ? "2px solid rgba(0,0,0,0.25)"
-                    : "2px solid transparent",
-                  color: textColorForStatus(p.status),
                 }}
                 onMouseEnter={(e) =>
                   handleBarEnter(p.project_number, e)
@@ -618,12 +734,28 @@ export default function Timeline({ projects }: TimelineProps) {
                 onMouseMove={handleBarMouseMove}
                 onMouseLeave={handleBarLeave}
               >
-                <span className="text-[11px] font-medium opacity-60">
+                <span
+                  className="text-[11px] font-medium"
+                  style={{ opacity: 0.7 }}
+                >
                   #{p.project_number}
                 </span>
                 <span className="text-[12px] font-medium truncate">
                   {p.name}
                 </span>
+                {/* Show status label inside white/dashed bars */}
+                {barStyle.isDashed && (
+                  <span
+                    className="ml-auto rounded-full px-1.5 py-0.5 text-[9px] font-semibold"
+                    style={{
+                      backgroundColor:
+                        STATUS_COLORS_SOFT[p.status] || "#eee",
+                      color: "#555",
+                    }}
+                  >
+                    {STATUS_LABELS[p.status] || p.status}
+                  </span>
+                )}
               </div>
             </div>
           );
@@ -718,7 +850,14 @@ function HoverPopup({
     p.checklists.every((c) => c.done === c.total);
 
   const showWarning =
-    isFerdig && p.checklists && p.checklists.length > 0 && !allChecklistsPassed;
+    isFerdig &&
+    p.checklists &&
+    p.checklists.length > 0 &&
+    !allChecklistsPassed;
+
+  // Use the active stage's color for the stage indicator
+  const stageStatusColor =
+    STATUS_COLORS_SOFT[p.status] || "#9ca3af";
 
   const stages: StageKey[] = [1, 2, 3];
 
@@ -753,7 +892,8 @@ function HoverPopup({
           <span
             className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold"
             style={{
-              backgroundColor: STATUS_COLORS_SOFT[p.status] || "#ddd",
+              backgroundColor:
+                STATUS_COLORS_SOFT[p.status] || "#ddd",
               color: "#1a1a2e",
             }}
           >
@@ -858,8 +998,8 @@ function HoverPopup({
               circleBorder = "#22c55e";
               circleText = "#fff";
             } else if (state === "active") {
-              circleBg = STATUS_COLORS[p.status] || "#9ca3af";
-              circleBorder = STATUS_COLORS[p.status] || "#9ca3af";
+              circleBg = stageStatusColor;
+              circleBorder = stageStatusColor;
               circleText = "#1a1a2e";
             } else {
               circleBg = "transparent";
@@ -868,7 +1008,11 @@ function HoverPopup({
             }
 
             return (
-              <div key={s} className="flex items-center" style={{ flex: 1 }}>
+              <div
+                key={s}
+                className="flex items-center"
+                style={{ flex: 1 }}
+              >
                 <button
                   className="flex flex-col items-center gap-1 flex-1 cursor-pointer group"
                   onClick={() => setViewingStage(s)}
@@ -900,7 +1044,6 @@ function HoverPopup({
                   </span>
                 </button>
 
-                {/* Arrow connector */}
                 {i < 2 && (
                   <span
                     className="text-[14px] font-light mx-0.5 -mt-4"
@@ -972,7 +1115,6 @@ function HoverPopup({
                       textDecoration: done
                         ? "line-through"
                         : "none",
-                      fontWeight: done ? 400 : 400,
                     }}
                   >
                     {item}
@@ -994,14 +1136,12 @@ function HoverPopup({
 
       {/* Warning banner */}
       {showWarning && (
-        <div
-          className="mx-5 mb-4 rounded-lg bg-amber-50 px-3 py-2.5 text-[11px] font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
-        >
-          Sjekklister m&aring; godkjennes f&oslash;r prosjektet kan lukkes
+        <div className="mx-5 mb-4 rounded-lg bg-amber-50 px-3 py-2.5 text-[11px] font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+          Sjekklister m&aring; godkjennes f&oslash;r prosjektet kan
+          lukkes
         </div>
       )}
 
-      {/* Bottom padding */}
       <div style={{ height: 4 }} />
     </div>
   );
