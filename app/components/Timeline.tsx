@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import type { Project, Checklist, Checkin } from "@/lib/types";
 import {
   STATUS_COLORS_SOFT,
@@ -15,12 +15,13 @@ interface TimelineProps {
 
 const EMPLOYEES = ["Roar", "Andrii", "Marci"];
 const LEFT_COL = 240;
-const ROW_HEIGHT = 40;
-const BAR_HEIGHT = 24;
+const ROW_HEIGHT = 36;
+const BAR_HEIGHT = 20;
 const EMP_HEADER = 32;
-const HEADER_HEIGHT = 56; // month row + day row
+const HEADER_HEIGHT = 52;
 const MONTH_ROW = 24;
-const DAY_ROW = 32;
+const DAY_ROW = 28;
+const DAY_W = 40;
 
 // --- Utilities ---
 
@@ -31,10 +32,7 @@ function daysBetween(a: string, b: string) {
 }
 
 function formatDate(d: string) {
-  return new Date(d).toLocaleDateString("nb-NO", {
-    day: "numeric",
-    month: "short",
-  });
+  return new Date(d).toLocaleDateString("nb-NO", { day: "numeric", month: "short" });
 }
 
 function formatPrice(n: number) {
@@ -46,14 +44,8 @@ function formatPrice(n: number) {
   }).format(n);
 }
 
-/** Get the Monday of the week containing a date */
-function getMonday(d: Date): Date {
-  const result = new Date(d);
-  const day = result.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  result.setDate(result.getDate() + diff);
-  result.setHours(0, 0, 0, 0);
-  return result;
+function dayIndex(rangeStartStr: string, date: string) {
+  return daysBetween(rangeStartStr, date);
 }
 
 // --- Bar colors ---
@@ -61,67 +53,43 @@ function getMonday(d: Date): Date {
 interface BarStyle {
   bg: string;
   border: string;
-  textColor: string;
-  showStatusPill: boolean;
 }
 
 function getBarStyle(p: Project, today: string): BarStyle {
   if (p.status === "ferdig") {
-    return { bg: "#BDBDBD", border: "1px solid #A8A8A8", textColor: "#fff", showStatusPill: false };
+    return { bg: "#BDBDBD", border: "1px solid #A8A8A8" };
   }
   if (
     p.status === "innkommende" ||
     p.status === "planlegging" ||
     (p.start_date && p.start_date > today)
   ) {
-    return { bg: "#ffffff", border: "1px dashed #C0C0C0", textColor: "#555", showStatusPill: true };
+    return { bg: "#ffffff", border: "1px dashed #C0C0C0" };
   }
   const overdue = p.estimated_end_date && p.estimated_end_date < today && p.status !== "ferdig";
   if (overdue) {
-    return { bg: "#E06050", border: "1px solid #C9503F", textColor: "#fff", showStatusPill: false };
+    return { bg: "#E53935", border: "1px solid #C62828" };
   }
   const nearDeadline =
     p.estimated_end_date &&
-    daysBetween(today, p.estimated_end_date) <= 5 &&
+    daysBetween(today, p.estimated_end_date) <= 3 &&
     daysBetween(today, p.estimated_end_date) >= 0;
   if (p.status === "venter kunde" || nearDeadline) {
-    return { bg: "#E5A940", border: "1px solid #CF952F", textColor: "#fff", showStatusPill: false };
+    return { bg: "#FF9800", border: "1px solid #E68900" };
   }
-  return { bg: "#4A90D9", border: "1px solid #3D7CC0", textColor: "#fff", showStatusPill: false };
+  return { bg: "#4CAF50", border: "1px solid #388E3C" };
 }
 
 // --- Stage workflow logic ---
 
 type StageKey = 1 | 2 | 3;
 
-const STAGE_LABELS: Record<StageKey, string> = {
-  1: "Oppstart",
-  2: "Pågående",
-  3: "Avslutning",
-};
+const STAGE_LABELS: Record<StageKey, string> = { 1: "Oppstart", 2: "Pågående", 3: "Avslutning" };
 
 const STAGE_ITEMS: Record<StageKey, string[]> = {
-  1: [
-    "Kontrakt signert",
-    "Prosjektmappe opprettet",
-    "Materialliste klar",
-    "Planner-oppgave opprettet",
-    "Kickoff med team",
-  ],
-  2: [
-    "Vernerunde gjennomført",
-    "Materialer bestilt/levert",
-    "Kvalitetskontroll underveis",
-    "Timer og kostnader loggført",
-    "Oppfølging med kunde",
-  ],
-  3: [
-    "Kvalitetskontroll ferdig",
-    "Ferdigstillelse-sjekkliste",
-    "FDV-dokumentasjon levert",
-    "Sluttfaktura sendt",
-    "Prosjekt lukket i Planner",
-  ],
+  1: ["Kontrakt signert", "Prosjektmappe opprettet", "Materialliste klar", "Planner-oppgave opprettet", "Kickoff med team"],
+  2: ["Vernerunde gjennomført", "Materialer bestilt/levert", "Kvalitetskontroll underveis", "Timer og kostnader loggført", "Oppfølging med kunde"],
+  3: ["Kvalitetskontroll ferdig", "Ferdigstillelse-sjekkliste", "FDV-dokumentasjon levert", "Sluttfaktura sendt", "Prosjekt lukket i Planner"],
 };
 
 function getActiveStage(status: string): StageKey {
@@ -130,62 +98,34 @@ function getActiveStage(status: string): StageKey {
   return 3;
 }
 
-function getStageState(
-  stageKey: StageKey,
-  activeStage: StageKey,
-  allChecklistsPassed: boolean,
-  isFerdig: boolean
-): "completed" | "active" | "future" {
+function getStageState(stageKey: StageKey, activeStage: StageKey, allChecklistsPassed: boolean, isFerdig: boolean): "completed" | "active" | "future" {
   if (isFerdig && allChecklistsPassed) return "completed";
   if (stageKey < activeStage) return "completed";
   if (stageKey === activeStage) return "active";
   return "future";
 }
 
-function isItemComplete(
-  stageKey: StageKey,
-  itemIndex: number,
-  activeStage: StageKey,
-  checklists: Checklist[] | undefined,
-  isFerdig: boolean,
-  allChecklistsPassed: boolean
-): boolean {
+function isItemComplete(stageKey: StageKey, itemIndex: number, activeStage: StageKey, checklists: Checklist[] | undefined, isFerdig: boolean, allChecklistsPassed: boolean): boolean {
   if (isFerdig && allChecklistsPassed) return true;
   if (stageKey < activeStage) return true;
   if (stageKey > activeStage) return false;
   const cls = checklists || [];
   if (stageKey === 2) {
     const item = STAGE_ITEMS[2][itemIndex];
-    if (item === "Vernerunde gjennomført") {
-      const v = cls.find((c) => c.name.toLowerCase().includes("vernerunde"));
-      return v ? v.done === v.total : false;
-    }
-    if (item === "Kvalitetskontroll underveis") {
-      const q = cls.find((c) => c.name.toLowerCase().includes("kvalitetskontroll"));
-      return q ? q.done === q.total : false;
-    }
+    if (item === "Vernerunde gjennomført") { const v = cls.find((c) => c.name.toLowerCase().includes("vernerunde")); return v ? v.done === v.total : false; }
+    if (item === "Kvalitetskontroll underveis") { const q = cls.find((c) => c.name.toLowerCase().includes("kvalitetskontroll")); return q ? q.done === q.total : false; }
   }
   if (stageKey === 3) {
     const item = STAGE_ITEMS[3][itemIndex];
-    if (item === "Kvalitetskontroll ferdig") {
-      const q = cls.find((c) => c.name.toLowerCase().includes("kvalitetskontroll"));
-      return q ? q.done === q.total : false;
-    }
-    if (item === "Ferdigstillelse-sjekkliste") {
-      const f = cls.find((c) => c.name.toLowerCase().includes("ferdigstillelse"));
-      return f ? f.done === f.total : false;
-    }
+    if (item === "Kvalitetskontroll ferdig") { const q = cls.find((c) => c.name.toLowerCase().includes("kvalitetskontroll")); return q ? q.done === q.total : false; }
+    if (item === "Ferdigstillelse-sjekkliste") { const f = cls.find((c) => c.name.toLowerCase().includes("ferdigstillelse")); return f ? f.done === f.total : false; }
     if (item === "Sluttfaktura sendt") return isFerdig || activeStage === 3;
     if (item === "Prosjekt lukket i Planner") return isFerdig;
   }
   return false;
 }
 
-function getChecklistForItem(
-  stageKey: StageKey,
-  itemIndex: number,
-  checklists: Checklist[] | undefined
-): Checklist | null {
+function getChecklistForItem(stageKey: StageKey, itemIndex: number, checklists: Checklist[] | undefined): Checklist | null {
   const cls = checklists || [];
   if (stageKey === 2) {
     if (itemIndex === 0) return cls.find((c) => c.name.toLowerCase().includes("vernerunde")) || null;
@@ -204,73 +144,66 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
   const [hoveredProject, setHoveredProject] = useState<string | null>(null);
   const [popupPos, setPopupPos] = useState({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [scrolledToToday, setScrolledToToday] = useState(false);
 
   const safeProjects = projects || [];
   const datedProjects = safeProjects.filter((p) => p.start_date && p.estimated_end_date);
   const today = new Date().toISOString().split("T")[0];
 
-  // --- Timeline range: 2 weeks before today → 4 weeks after latest end (or 6 weeks from today) ---
+  // --- Timeline range ---
   const allProjectDates = datedProjects.flatMap((p) => [p.start_date!, p.estimated_end_date!]);
-  const latestDate = allProjectDates.length > 0
-    ? allProjectDates.sort().reverse()[0]
-    : today;
+  const earliestDate = allProjectDates.length > 0 ? allProjectDates.sort()[0] : today;
+  const latestDate = allProjectDates.length > 0 ? allProjectDates.sort().reverse()[0] : today;
 
-  const rangeStartDate = new Date(today);
-  rangeStartDate.setDate(rangeStartDate.getDate() - 14);
-  const rangeStart = getMonday(rangeStartDate);
+  // Start 14 days before the earlier of today or earliest project
+  const startAnchor = earliestDate < today ? earliestDate : today;
+  const rangeStartD = new Date(startAnchor);
+  rangeStartD.setDate(rangeStartD.getDate() - 14);
+  const rangeStartStr = rangeStartD.toISOString().split("T")[0];
 
-  const latestEnd = new Date(latestDate);
-  latestEnd.setDate(latestEnd.getDate() + 28);
-  const minEnd = new Date(today);
-  minEnd.setDate(minEnd.getDate() + 42);
-  const rangeEndDate = latestEnd > minEnd ? latestEnd : minEnd;
-  // Snap to end of week (Sunday)
-  const rangeEnd = new Date(rangeEndDate);
-  const endDay = rangeEnd.getDay();
-  if (endDay !== 0) rangeEnd.setDate(rangeEnd.getDate() + (7 - endDay));
+  // End 28 days after latest, minimum 42 days from today
+  const endFromProjects = new Date(latestDate);
+  endFromProjects.setDate(endFromProjects.getDate() + 28);
+  const endFromToday = new Date(today);
+  endFromToday.setDate(endFromToday.getDate() + 42);
+  const rangeEndD = endFromProjects > endFromToday ? endFromProjects : endFromToday;
+  const rangeEndStr = rangeEndD.toISOString().split("T")[0];
 
-  const rangeStartStr = rangeStart.toISOString().split("T")[0];
-  const rangeEndStr = rangeEnd.toISOString().split("T")[0];
   const totalDays = Math.max(1, daysBetween(rangeStartStr, rangeEndStr));
+  const gridWidth = totalDays * DAY_W;
 
-  function dateToPct(date: string) {
-    return (daysBetween(rangeStartStr, date) / totalDays) * 100;
-  }
-
-  // --- Build weeks array ---
-  const weeks: { monday: Date; dateStr: string; pct: number; month: string; dayLabel: string }[] = [];
-  const wCur = new Date(rangeStart);
-  while (wCur < rangeEnd) {
-    const ds = wCur.toISOString().split("T")[0];
-    weeks.push({
-      monday: new Date(wCur),
-      dateStr: ds,
-      pct: dateToPct(ds),
-      month: wCur.toLocaleDateString("nb-NO", { month: "short" }).replace(".", ""),
-      dayLabel: String(wCur.getDate()),
+  // --- Build days array ---
+  const days: { dateStr: string; dayNum: number; dow: number; month: number; year: number }[] = [];
+  const dCur = new Date(rangeStartD);
+  for (let i = 0; i < totalDays; i++) {
+    days.push({
+      dateStr: dCur.toISOString().split("T")[0],
+      dayNum: dCur.getDate(),
+      dow: dCur.getDay(), // 0=Sun, 6=Sat
+      month: dCur.getMonth(),
+      year: dCur.getFullYear(),
     });
-    wCur.setDate(wCur.getDate() + 7);
+    dCur.setDate(dCur.getDate() + 1);
   }
 
-  // --- Build month spans from weeks ---
-  const monthSpans: { label: string; startPct: number; endPct: number }[] = [];
-  let curMonthKey = "";
-  for (let i = 0; i < weeks.length; i++) {
-    const w = weeks[i];
-    const mKey = w.monday.getFullYear() + "-" + w.monday.getMonth();
-    const mLabel = w.monday.toLocaleDateString("nb-NO", { month: "long" });
-    const capLabel = mLabel.charAt(0).toUpperCase() + mLabel.slice(1);
-    const nextPct = i < weeks.length - 1 ? weeks[i + 1].pct : 100;
-    if (mKey !== curMonthKey) {
-      monthSpans.push({ label: capLabel, startPct: w.pct, endPct: nextPct });
-      curMonthKey = mKey;
+  // --- Month spans for header ---
+  const monthSpans: { label: string; startIdx: number; count: number }[] = [];
+  let curKey = "";
+  for (let i = 0; i < days.length; i++) {
+    const d = days[i];
+    const key = `${d.year}-${d.month}`;
+    if (key !== curKey) {
+      const label = new Date(d.year, d.month, 1).toLocaleDateString("nb-NO", { month: "long" });
+      monthSpans.push({ label: label.charAt(0).toUpperCase() + label.slice(1), startIdx: i, count: 1 });
+      curKey = key;
     } else {
-      monthSpans[monthSpans.length - 1].endPct = nextPct;
+      monthSpans[monthSpans.length - 1].count++;
     }
   }
 
-  const todayPct = dateToPct(today);
+  const todayIdx = dayIndex(rangeStartStr, today);
 
   // --- Group by employee ---
   const grouped: Record<string, Project[]> = {};
@@ -292,36 +225,32 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
     if (group.length === 0) continue;
     headers.push({ label: emp, color: EMPLOYEE_COLORS[emp] || "#999", y });
     y += EMP_HEADER;
-    group.forEach((p) => {
-      rows.push({ project: p, y });
-      y += ROW_HEIGHT;
-    });
+    group.forEach((p) => { rows.push({ project: p, y }); y += ROW_HEIGHT; });
   }
-
   if (undated.length > 0) {
     headers.push({ label: "Uten dato", color: "#999", y });
     y += EMP_HEADER;
-    undated.forEach((p) => {
-      rows.push({ project: p, y });
-      y += ROW_HEIGHT;
-    });
+    undated.forEach((p) => { rows.push({ project: p, y }); y += ROW_HEIGHT; });
   }
 
   const totalHeight = Math.max(200, y);
 
-  // --- Hover handlers ---
-  const POPUP_HEIGHT_EST = 420;
-  const POPUP_WIDTH = 380;
+  // --- Scroll to today on mount ---
+  useEffect(() => {
+    if (scrolledToToday || !scrollRef.current) return;
+    const el = scrollRef.current;
+    const todayX = todayIdx * DAY_W;
+    const viewWidth = el.clientWidth;
+    el.scrollLeft = todayX - viewWidth / 2;
+    setScrolledToToday(true);
+  }, [scrolledToToday, todayIdx]);
 
+  // --- Hover handlers ---
   const handleBarMouseMove = useCallback((e: React.MouseEvent) => {
     let px = e.clientX + 16;
     let py = e.clientY + 8;
-    if (window.innerHeight - e.clientY < POPUP_HEIGHT_EST + 20) {
-      py = e.clientY - POPUP_HEIGHT_EST - 10;
-    }
-    if (px + POPUP_WIDTH > window.innerWidth - 16) {
-      px = e.clientX - POPUP_WIDTH - 16;
-    }
+    if (window.innerHeight - e.clientY < 440) py = e.clientY - 430;
+    if (px + 380 > window.innerWidth - 16) px = e.clientX - 396;
     setPopupPos({ x: px, y: py });
   }, []);
 
@@ -351,23 +280,16 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
   if (safeProjects.length === 0) {
     const activeCheckins = (checkins || []).filter((c) => c.status === "checked_in");
     return (
-      <div
-        className="rounded-xl"
-        style={{ border: "1px solid var(--card-border)", backgroundColor: "var(--card-bg)", minHeight: 400 }}
-      >
+      <div className="rounded-xl" style={{ border: "1px solid var(--card-border)", backgroundColor: "var(--card-bg)", minHeight: 400 }}>
         {activeCheckins.length > 0 && (
           <div className="p-5 pb-3">
-            <p className="text-[11px] font-semibold uppercase mb-3" style={{ color: "var(--muted-light)", letterSpacing: "0.04em" }}>
-              Aktive i dag
-            </p>
+            <p className="text-[11px] font-semibold uppercase mb-3" style={{ color: "var(--muted-light)", letterSpacing: "0.04em" }}>Aktive i dag</p>
             <div className="flex gap-3 flex-wrap">
               {activeCheckins.map((c) => {
-                const empColor = EMPLOYEE_COLORS[c.employee] || "#4A90D9";
+                const empColor = EMPLOYEE_COLORS[c.employee] || "#4CAF50";
                 return (
                   <div key={c.employee} className="flex items-start gap-3 rounded-lg" style={{ border: "1px solid var(--card-border)", backgroundColor: "var(--surface)", padding: "12px 16px", flex: "1 1 200px", maxWidth: 340 }}>
-                    <div className="flex shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white mt-0.5" style={{ width: 22, height: 22, backgroundColor: empColor }}>
-                      {c.employee[0]}
-                    </div>
+                    <div className="flex shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white mt-0.5" style={{ width: 22, height: 22, backgroundColor: empColor }}>{c.employee[0]}</div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="text-[13px] font-semibold" style={{ color: "var(--foreground)" }}>{c.employee}</span>
@@ -397,198 +319,116 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
 
   // ===================== RENDER =====================
   return (
-    <div
-      ref={containerRef}
-      className="rounded-xl overflow-hidden"
-      style={{ border: "1px solid var(--card-border)", backgroundColor: "var(--card-bg)" }}
-    >
-      {/* Scrollable timeline area */}
-      <div className="overflow-x-auto">
-        <div style={{ minWidth: 900 }}>
+    <div ref={containerRef} className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--card-border)", backgroundColor: "var(--card-bg)" }}>
+      <div className="flex">
+        {/* ── Fixed left column ── */}
+        <div className="shrink-0" style={{ width: LEFT_COL, borderRight: "1px solid #E0E0E0" }}>
+          {/* Header spacer */}
+          <div className="flex items-end pb-2 pl-5 text-[11px] font-semibold uppercase" style={{ height: HEADER_HEIGHT, color: "var(--muted-light)", borderBottom: "1px solid #E0E0E0", letterSpacing: "0.04em" }}>
+            Prosjekt
+          </div>
+          {/* Employee headers + project labels */}
+          <div className="relative" style={{ height: totalHeight }}>
+            {headers.map((h) => (
+              <div key={h.label} className="absolute flex items-center gap-2 pl-5" style={{ top: h.y, width: LEFT_COL, height: EMP_HEADER, backgroundColor: "#FAFAFA", borderBottom: "1px solid #F0F0F0" }}>
+                <span className="rounded-full" style={{ width: 8, height: 8, backgroundColor: h.color }} />
+                <span className="text-[12px] font-semibold" style={{ color: "var(--foreground)" }}>{h.label}</span>
+              </div>
+            ))}
+            {rows.map((row) => {
+              const p = row.project;
+              const isFerdig = p.status === "ferdig";
+              return (
+                <div key={`lbl-${p.project_number}`} className="absolute flex items-center pl-5 pr-3" style={{ top: row.y, width: LEFT_COL, height: ROW_HEIGHT, borderBottom: "1px solid #F8F8F8" }}>
+                  <div className="truncate text-[12px]">
+                    <span style={{ color: "var(--muted-light)" }}>#{p.project_number}</span>{" "}
+                    <span style={{ color: isFerdig ? "var(--muted-light)" : "var(--foreground)", textDecoration: isFerdig ? "line-through" : "none" }}>{p.name}</span>
+                    {p.dependency && <span className="ml-1 text-[10px] italic" style={{ color: "#999" }}>&larr; #{p.dependency}</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
-          {/* ── Two-row header: months + day numbers ── */}
-          <div className="sticky top-0 z-10 flex" style={{ borderBottom: "1px solid #E0E0E0", backgroundColor: "var(--card-bg)" }}>
-            {/* Left column header */}
-            <div
-              className="shrink-0 flex items-end pb-2 pl-5 text-[11px] font-semibold uppercase"
-              style={{ width: LEFT_COL, color: "var(--muted-light)", borderRight: "1px solid #E0E0E0", height: HEADER_HEIGHT, letterSpacing: "0.04em" }}
-            >
-              Prosjekt
-            </div>
-
-            {/* Timeline header */}
-            <div className="relative flex-1" style={{ height: HEADER_HEIGHT }}>
+        {/* ── Scrollable day grid ── */}
+        <div ref={scrollRef} className="flex-1 overflow-x-auto" style={{ scrollBehavior: "smooth" }}>
+          <div style={{ width: gridWidth, position: "relative" }}>
+            {/* Day header */}
+            <div className="sticky top-0 z-10" style={{ height: HEADER_HEIGHT, borderBottom: "1px solid #E0E0E0", backgroundColor: "var(--card-bg)" }}>
               {/* Month row */}
               {monthSpans.map((m) => (
-                <div
-                  key={m.label}
-                  className="absolute flex items-center pl-2"
-                  style={{ left: `${m.startPct}%`, width: `${m.endPct - m.startPct}%`, top: 0, height: MONTH_ROW, borderLeft: "1px solid #E0E0E0" }}
-                >
-                  <span className="text-[11px] font-semibold whitespace-nowrap" style={{ color: "var(--muted)", letterSpacing: "0.02em" }}>
-                    {m.label}
-                  </span>
+                <div key={`m-${m.startIdx}`} className="absolute flex items-center pl-2" style={{ left: m.startIdx * DAY_W, width: m.count * DAY_W, top: 0, height: MONTH_ROW, borderLeft: "1px solid #E0E0E0" }}>
+                  <span className="text-[11px] font-semibold whitespace-nowrap" style={{ color: "var(--muted)", letterSpacing: "0.02em" }}>{m.label}</span>
                 </div>
               ))}
-
-              {/* Week day-number row */}
-              {weeks.map((w, i) => {
-                const nextPct = i < weeks.length - 1 ? weeks[i + 1].pct : 100;
-                const isFirstOfMonth = i === 0 || w.monday.getMonth() !== weeks[i - 1].monday.getMonth();
+              {/* Day number row */}
+              {days.map((d, i) => {
+                const isToday = d.dateStr === today;
+                const isWeekend = d.dow === 0 || d.dow === 6;
+                const isFirstOfMonth = i === 0 || d.month !== days[i - 1].month;
                 return (
                   <div
-                    key={w.dateStr}
+                    key={d.dateStr}
                     className="absolute flex items-center justify-center"
                     style={{
-                      left: `${w.pct}%`,
-                      width: `${nextPct - w.pct}%`,
+                      left: i * DAY_W,
+                      width: DAY_W,
                       top: MONTH_ROW,
                       height: DAY_ROW,
-                      borderLeft: `1px solid ${isFirstOfMonth ? "#E0E0E0" : "#F0F0F0"}`,
+                      borderLeft: isFirstOfMonth ? "1px solid #E0E0E0" : "1px solid #F0F0F0",
+                      backgroundColor: isToday ? "rgba(229, 57, 53, 0.08)" : isWeekend ? "#F8F8F8" : undefined,
                     }}
                   >
-                    <span className="text-[10px] font-medium" style={{ color: "var(--muted-light)" }}>
-                      {w.dayLabel}
-                    </span>
+                    <span className="text-[10px] font-medium" style={{ color: isToday ? "#E53935" : isWeekend ? "#BBB" : "var(--muted-light)" }}>{d.dayNum}</span>
                   </div>
                 );
               })}
-
-              {/* "I dag" dot in header */}
-              <div className="absolute z-30 -translate-x-1/2" style={{ left: `${todayPct}%`, bottom: 2 }}>
-                <div className="rounded-full" style={{ width: 6, height: 6, backgroundColor: "#E06050" }} />
-              </div>
-            </div>
-          </div>
-
-          {/* ── Body ── */}
-          <div className="relative flex" style={{ height: totalHeight }}>
-            {/* Left column */}
-            <div className="shrink-0" style={{ width: LEFT_COL, borderRight: "1px solid #E0E0E0" }}>
-              {/* Employee headers */}
-              {headers.map((h) => (
-                <div
-                  key={h.label}
-                  className="absolute flex items-center gap-2 pl-5"
-                  style={{
-                    top: h.y,
-                    left: 0,
-                    width: LEFT_COL,
-                    height: EMP_HEADER,
-                    backgroundColor: "#FAFAFA",
-                    borderBottom: "1px solid #F0F0F0",
-                  }}
-                >
-                  <span className="rounded-full" style={{ width: 8, height: 8, backgroundColor: h.color }} />
-                  <span className="text-[12px] font-semibold" style={{ color: "var(--foreground)" }}>
-                    {h.label}
-                  </span>
+              {/* "I dag" red dot */}
+              {todayIdx >= 0 && todayIdx < totalDays && (
+                <div className="absolute z-30" style={{ left: todayIdx * DAY_W + DAY_W / 2 - 3, top: MONTH_ROW - 2 }}>
+                  <div className="rounded-full" style={{ width: 6, height: 6, backgroundColor: "#E53935" }} />
                 </div>
-              ))}
-
-              {/* Project labels in left column */}
-              {rows.map((row) => {
-                const p = row.project;
-                const isFerdig = p.status === "ferdig";
-                return (
-                  <div
-                    key={`label-${p.project_number}`}
-                    className="absolute flex items-center pl-5 pr-3"
-                    style={{ top: row.y, width: LEFT_COL, height: ROW_HEIGHT, borderBottom: "1px solid #F5F5F5" }}
-                  >
-                    <div className="truncate text-[12px]">
-                      <span style={{ color: "var(--muted-light)" }}>#{p.project_number}</span>{" "}
-                      <span style={{ color: isFerdig ? "var(--muted-light)" : "var(--foreground)", textDecoration: isFerdig ? "line-through" : "none" }}>
-                        {p.name}
-                      </span>
-                      {p.dependency && (
-                        <span className="ml-1 text-[10px] italic" style={{ color: "#999" }}>
-                          &larr; #{p.dependency}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+              )}
             </div>
 
-            {/* Timeline area */}
-            <div className="relative flex-1">
-              {/* Week gridlines */}
-              {weeks.map((w, i) => {
-                const isFirstOfMonth = i === 0 || w.monday.getMonth() !== weeks[i - 1].monday.getMonth();
+            {/* Day grid body */}
+            <div className="relative" style={{ height: totalHeight }}>
+              {/* Day column backgrounds */}
+              {days.map((d, i) => {
+                const isToday = d.dateStr === today;
+                const isWeekend = d.dow === 0 || d.dow === 6;
+                const isFirstOfMonth = i === 0 || d.month !== days[i - 1].month;
+                if (!isToday && !isWeekend && !isFirstOfMonth) return null;
                 return (
                   <div
-                    key={`grid-${w.dateStr}`}
+                    key={`bg-${d.dateStr}`}
                     className="absolute pointer-events-none"
                     style={{
-                      left: `${w.pct}%`,
+                      left: i * DAY_W,
+                      width: DAY_W,
                       top: 0,
-                      width: 1,
                       height: totalHeight,
-                      backgroundColor: isFirstOfMonth ? "#E0E0E0" : "#F0F0F0",
+                      backgroundColor: isToday ? "rgba(229, 57, 53, 0.04)" : isWeekend ? "#FAFAFA" : undefined,
+                      borderLeft: isFirstOfMonth ? "1px solid #E8E8E8" : undefined,
                     }}
                   />
                 );
               })}
 
-              {/* Today highlight column */}
-              {(() => {
-                // Find which week today falls in
-                let todayWeekIdx = -1;
-                for (let i = 0; i < weeks.length; i++) {
-                  const wStart = weeks[i].dateStr;
-                  const wEnd = i < weeks.length - 1 ? weeks[i + 1].dateStr : rangeEndStr;
-                  if (today >= wStart && today < wEnd) { todayWeekIdx = i; break; }
-                }
-                if (todayWeekIdx >= 0) {
-                  const wPct = weeks[todayWeekIdx].pct;
-                  const nextPct = todayWeekIdx < weeks.length - 1 ? weeks[todayWeekIdx + 1].pct : 100;
-                  return (
-                    <div
-                      className="absolute pointer-events-none"
-                      style={{
-                        left: `${wPct}%`,
-                        width: `${nextPct - wPct}%`,
-                        top: 0,
-                        height: totalHeight,
-                        backgroundColor: "rgba(224, 96, 80, 0.04)",
-                      }}
-                    />
-                  );
-                }
-                return null;
-              })()}
+              {/* Today vertical line */}
+              {todayIdx >= 0 && todayIdx < totalDays && (
+                <div className="absolute z-10 pointer-events-none" style={{ left: todayIdx * DAY_W + DAY_W / 2, top: 0, width: 1, height: totalHeight, backgroundColor: "#E53935", opacity: 0.5 }} />
+              )}
 
-              {/* Today line */}
-              <div
-                className="absolute z-20 pointer-events-none"
-                style={{ left: `${todayPct}%`, top: 0, width: 1, height: totalHeight, backgroundColor: "#E06050" }}
-              />
-
-              {/* Employee header backgrounds in timeline area */}
+              {/* Employee header row backgrounds */}
               {headers.map((h) => (
-                <div
-                  key={`hdr-bg-${h.label}`}
-                  className="absolute"
-                  style={{
-                    top: h.y,
-                    left: 0,
-                    right: 0,
-                    height: EMP_HEADER,
-                    backgroundColor: "#FAFAFA",
-                    borderBottom: "1px solid #F0F0F0",
-                  }}
-                />
+                <div key={`hbg-${h.label}`} className="absolute" style={{ top: h.y, left: 0, width: gridWidth, height: EMP_HEADER, backgroundColor: "#FAFAFA", borderBottom: "1px solid #F0F0F0" }} />
               ))}
 
-              {/* Row bottom borders */}
+              {/* Row borders */}
               {rows.map((row) => (
-                <div
-                  key={`border-${row.project.project_number}`}
-                  className="absolute pointer-events-none"
-                  style={{ top: row.y + ROW_HEIGHT - 1, left: 0, right: 0, height: 1, backgroundColor: "#F5F5F5" }}
-                />
+                <div key={`rb-${row.project.project_number}`} className="absolute pointer-events-none" style={{ top: row.y + ROW_HEIGHT - 1, left: 0, width: gridWidth, height: 1, backgroundColor: "#F8F8F8" }} />
               ))}
 
               {/* Project bars */}
@@ -596,29 +436,19 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
                 const p = row.project;
                 if (!p.start_date || !p.estimated_end_date) {
                   return (
-                    <div
-                      key={p.project_number}
-                      className="absolute flex items-center pl-2"
-                      style={{ top: row.y, left: 0, right: 0, height: ROW_HEIGHT }}
-                    >
-                      <span
-                        className="rounded px-2 py-0.5 text-[10px] font-medium"
-                        style={{ backgroundColor: STATUS_COLORS_SOFT[p.status] || "#eee", color: "#555" }}
-                      >
+                    <div key={p.project_number} className="absolute flex items-center pl-2" style={{ top: row.y, left: 0, height: ROW_HEIGHT }}>
+                      <span className="rounded px-2 py-0.5 text-[10px] font-medium" style={{ backgroundColor: STATUS_COLORS_SOFT[p.status] || "#eee", color: "#555" }}>
                         {STATUS_LABELS[p.status] || p.status}
                       </span>
                     </div>
                   );
                 }
 
-                const startPct = dateToPct(p.start_date);
-                const endPct = dateToPct(p.estimated_end_date);
-                const durationDays = Math.max(1, daysBetween(p.start_date, p.estimated_end_date));
-                // Width is always proportional: at least 1 day wide
-                const oneDayPct = 100 / totalDays;
-                const widthPct = Math.max(oneDayPct, endPct - startPct);
-                // Bar is "narrow" if less than ~4 days — text goes outside
-                const isNarrow = durationDays <= 3;
+                const startI = dayIndex(rangeStartStr, p.start_date);
+                const endI = dayIndex(rangeStartStr, p.estimated_end_date);
+                const barDays = Math.max(1, endI - startI + 1);
+                const barLeft = startI * DAY_W;
+                const barWidth = barDays * DAY_W;
                 const isHovered = hoveredProject === p.project_number;
                 const bs = getBarStyle(p, today);
                 const empColor = EMPLOYEE_COLORS[p.assigned || ""] || null;
@@ -626,73 +456,34 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
                 return (
                   <div
                     key={p.project_number}
-                    className="absolute flex items-center"
-                    style={{ top: row.y, left: 0, right: 0, height: ROW_HEIGHT }}
+                    className="absolute"
+                    style={{ top: row.y, left: barLeft, width: barWidth, height: ROW_HEIGHT }}
                   >
-                    {/* The bar itself */}
                     <div
-                      className="absolute flex items-center gap-1 cursor-pointer transition-shadow overflow-hidden whitespace-nowrap"
+                      className="absolute flex items-center cursor-pointer transition-shadow"
                       style={{
-                        left: `${startPct}%`,
-                        width: `${widthPct}%`,
+                        left: 0,
+                        width: barWidth,
                         height: BAR_HEIGHT,
                         top: (ROW_HEIGHT - BAR_HEIGHT) / 2,
                         backgroundColor: bs.bg,
                         border: isHovered ? "1px solid rgba(0,0,0,0.3)" : bs.border,
-                        borderRadius: 4,
-                        color: bs.textColor,
-                        boxShadow: isHovered ? "0 2px 8px rgba(0,0,0,0.12)" : "none",
-                        paddingLeft: isNarrow ? 3 : 8,
-                        paddingRight: isNarrow ? 3 : 8,
-                        justifyContent: isNarrow ? "center" : "flex-start",
+                        borderRadius: 3,
+                        boxShadow: isHovered ? "0 2px 6px rgba(0,0,0,0.12)" : "none",
                       }}
                       onMouseEnter={(e) => handleBarEnter(p.project_number, e)}
                       onMouseMove={handleBarMouseMove}
                       onMouseLeave={handleBarLeave}
                     >
-                      {/* Employee initial circle */}
                       {empColor && (
                         <div
-                          className="flex shrink-0 items-center justify-center rounded-full text-[8px] font-bold text-white"
-                          style={{ width: 18, height: 18, backgroundColor: empColor }}
+                          className="flex shrink-0 items-center justify-center rounded-full text-[7px] font-bold text-white ml-1"
+                          style={{ width: 16, height: 16, backgroundColor: empColor }}
                         >
                           {(p.assigned || "?")[0]}
                         </div>
                       )}
-                      {/* Text inside bar only for wide bars */}
-                      {!isNarrow && (
-                        <span className="text-[11px] font-medium truncate">{p.name}</span>
-                      )}
-                      {!isNarrow && bs.showStatusPill && (
-                        <span
-                          className="ml-auto shrink-0 rounded px-1.5 py-px text-[9px] font-medium"
-                          style={{ backgroundColor: STATUS_COLORS_SOFT[p.status] || "#eee", color: "#555" }}
-                        >
-                          {STATUS_LABELS[p.status] || p.status}
-                        </span>
-                      )}
                     </div>
-                    {/* Text label to the right of narrow bars */}
-                    {isNarrow && (
-                      <div
-                        className="absolute flex items-center gap-1.5 whitespace-nowrap pointer-events-none"
-                        style={{
-                          left: `calc(${startPct + widthPct}% + 6px)`,
-                          top: (ROW_HEIGHT - BAR_HEIGHT) / 2,
-                          height: BAR_HEIGHT,
-                        }}
-                      >
-                        <span className="text-[11px] font-medium" style={{ color: "var(--foreground)" }}>{p.name}</span>
-                        {bs.showStatusPill && (
-                          <span
-                            className="rounded px-1.5 py-px text-[9px] font-medium"
-                            style={{ backgroundColor: STATUS_COLORS_SOFT[p.status] || "#eee", color: "#555" }}
-                          >
-                            {STATUS_LABELS[p.status] || p.status}
-                          </span>
-                        )}
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -763,21 +554,13 @@ function HoverPopup({
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
     >
-      {/* Top section */}
       <div className="p-5 pb-0">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
-            <p className="text-[11px]" style={{ color: "var(--muted-light)" }}>
-              #{p.project_number}
-            </p>
-            <p className="mt-0.5 text-[15px] font-bold" style={{ color: "var(--foreground)" }}>
-              {p.name}
-            </p>
+            <p className="text-[11px]" style={{ color: "var(--muted-light)" }}>#{p.project_number}</p>
+            <p className="mt-0.5 text-[15px] font-bold" style={{ color: "var(--foreground)" }}>{p.name}</p>
           </div>
-          <span
-            className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold"
-            style={{ backgroundColor: STATUS_COLORS_SOFT[p.status] || "#eee", color: "#444" }}
-          >
+          <span className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold" style={{ backgroundColor: STATUS_COLORS_SOFT[p.status] || "#eee", color: "#444" }}>
             {STATUS_LABELS[p.status] || p.status}
           </span>
         </div>
@@ -792,68 +575,35 @@ function HoverPopup({
         {dep && (
           <p className="mb-3 text-[12px]" style={{ color: "var(--muted)" }}>
             Avhenger av{" "}
-            <span className="font-medium" style={{ color: "var(--foreground)" }}>
-              #{dep.project_number} {dep.name}
-            </span>
-            {dep.status !== "ferdig" && (
-              <span className="ml-1 font-medium" style={{ color: "#E5A940" }}>(ikke ferdig)</span>
-            )}
+            <span className="font-medium" style={{ color: "var(--foreground)" }}>#{dep.project_number} {dep.name}</span>
+            {dep.status !== "ferdig" && <span className="ml-1 font-medium" style={{ color: "#E5A940" }}>(ikke ferdig)</span>}
           </p>
         )}
 
         <div className="mb-4 grid grid-cols-2 gap-x-6 gap-y-1.5 text-[12px]" style={{ color: "var(--foreground)" }}>
-          {p.start_date && (
-            <div><span style={{ color: "var(--muted-light)" }}>Start: </span>{formatDate(p.start_date)}</div>
-          )}
-          {p.estimated_end_date && (
-            <div><span style={{ color: "var(--muted-light)" }}>Slutt: </span>{p.end_date_defaulted ? "Ikke estimert" : formatDate(p.estimated_end_date)}</div>
-          )}
-          {p.agreed_price != null && (
-            <div><span style={{ color: "var(--muted-light)" }}>Pris: </span>{formatPrice(p.agreed_price)}</div>
-          )}
-          {duration != null && (
-            <div><span style={{ color: "var(--muted-light)" }}>Varighet: </span>{duration} {duration === 1 ? "dag" : "dager"}</div>
-          )}
+          {p.start_date && <div><span style={{ color: "var(--muted-light)" }}>Start: </span>{formatDate(p.start_date)}</div>}
+          {p.estimated_end_date && <div><span style={{ color: "var(--muted-light)" }}>Slutt: </span>{p.end_date_defaulted ? "Ikke estimert" : formatDate(p.estimated_end_date)}</div>}
+          {p.agreed_price != null && <div><span style={{ color: "var(--muted-light)" }}>Pris: </span>{formatPrice(p.agreed_price)}</div>}
+          {duration != null && <div><span style={{ color: "var(--muted-light)" }}>Varighet: </span>{duration} {duration === 1 ? "dag" : "dager"}</div>}
         </div>
       </div>
 
-      {/* Stage workflow */}
       <div className="px-5 pt-4 pb-3" style={{ borderTop: "1px solid var(--divider)" }}>
         <div className="flex items-center mb-4">
           {stages.map((s, i) => {
             const state = getStageState(s, activeStage, allChecklistsPassed, isFerdig);
             const isViewing = viewingStage === s;
-
             let bg: string, borderCol: string, text: string;
-            if (state === "completed") {
-              bg = "#22c55e"; borderCol = "#22c55e"; text = "#fff";
-            } else if (state === "active") {
-              bg = "#4A90D9"; borderCol = "#4A90D9"; text = "#fff";
-            } else {
-              bg = "transparent"; borderCol = "#D0D0D0"; text = "#999";
-            }
-
+            if (state === "completed") { bg = "#22c55e"; borderCol = "#22c55e"; text = "#fff"; }
+            else if (state === "active") { bg = "#4CAF50"; borderCol = "#4CAF50"; text = "#fff"; }
+            else { bg = "transparent"; borderCol = "#D0D0D0"; text = "#999"; }
             return (
               <div key={s} className="flex items-center" style={{ flex: 1 }}>
-                <button
-                  className="flex flex-col items-center gap-1 flex-1 cursor-pointer"
-                  onClick={() => setViewingStage(s)}
-                >
-                  <div
-                    className="flex items-center justify-center rounded-full text-[11px] font-semibold"
-                    style={{
-                      width: 24, height: 24,
-                      backgroundColor: bg,
-                      border: `2px solid ${borderCol}`,
-                      color: text,
-                      boxShadow: isViewing ? "0 0 0 2px rgba(74,144,217,0.2)" : "none",
-                    }}
-                  >
+                <button className="flex flex-col items-center gap-1 flex-1 cursor-pointer" onClick={() => setViewingStage(s)}>
+                  <div className="flex items-center justify-center rounded-full text-[11px] font-semibold" style={{ width: 24, height: 24, backgroundColor: bg, border: `2px solid ${borderCol}`, color: text, boxShadow: isViewing ? "0 0 0 2px rgba(76,175,80,0.2)" : "none" }}>
                     {state === "completed" ? "\u2713" : s}
                   </div>
-                  <span className="text-[10px] font-medium" style={{ color: isViewing ? "var(--foreground)" : "var(--muted-light)" }}>
-                    {STAGE_LABELS[s]}
-                  </span>
+                  <span className="text-[10px] font-medium" style={{ color: isViewing ? "var(--foreground)" : "var(--muted-light)" }}>{STAGE_LABELS[s]}</span>
                 </button>
                 {i < 2 && (
                   <svg width="16" height="10" viewBox="0 0 16 10" className="-mt-3.5 mx-0.5" style={{ opacity: 0.3 }}>
@@ -866,32 +616,19 @@ function HoverPopup({
         </div>
 
         <div className="mb-1">
-          <p className="text-[10px] font-semibold uppercase mb-1.5" style={{ color: "var(--muted-light)", letterSpacing: "0.04em" }}>
-            {viewingStage}. {STAGE_LABELS[viewingStage]}
-          </p>
+          <p className="text-[10px] font-semibold uppercase mb-1.5" style={{ color: "var(--muted-light)", letterSpacing: "0.04em" }}>{viewingStage}. {STAGE_LABELS[viewingStage]}</p>
           {STAGE_ITEMS[viewingStage].map((item, idx) => {
             const done = isItemComplete(viewingStage, idx, activeStage, p.checklists, isFerdig, allChecklistsPassed);
             const linked = getChecklistForItem(viewingStage, idx, p.checklists);
             return (
               <div key={item} className="flex items-center gap-2" style={{ height: 24 }}>
                 {done ? (
-                  <svg width="14" height="14" viewBox="0 0 14 14" className="shrink-0">
-                    <circle cx="7" cy="7" r="6" fill="#22c55e" />
-                    <path d="M4,7 L6,9.5 L10,4.5" fill="none" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+                  <svg width="14" height="14" viewBox="0 0 14 14" className="shrink-0"><circle cx="7" cy="7" r="6" fill="#22c55e" /><path d="M4,7 L6,9.5 L10,4.5" fill="none" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
                 ) : (
-                  <svg width="14" height="14" viewBox="0 0 14 14" className="shrink-0">
-                    <circle cx="7" cy="7" r="5.5" fill="none" stroke="#D0D0D0" strokeWidth="1" />
-                  </svg>
+                  <svg width="14" height="14" viewBox="0 0 14 14" className="shrink-0"><circle cx="7" cy="7" r="5.5" fill="none" stroke="#D0D0D0" strokeWidth="1" /></svg>
                 )}
-                <span className="text-[12px]" style={{ color: done ? "var(--muted-light)" : "var(--foreground)", textDecoration: done ? "line-through" : "none" }}>
-                  {item}
-                </span>
-                {linked && (
-                  <span className="ml-auto text-[10px]" style={{ color: "var(--muted-light)" }}>
-                    {linked.done}/{linked.total}
-                  </span>
-                )}
+                <span className="text-[12px]" style={{ color: done ? "var(--muted-light)" : "var(--foreground)", textDecoration: done ? "line-through" : "none" }}>{item}</span>
+                {linked && <span className="ml-auto text-[10px]" style={{ color: "var(--muted-light)" }}>{linked.done}/{linked.total}</span>}
               </div>
             );
           })}
