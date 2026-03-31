@@ -238,22 +238,49 @@ export async function fetchLiveLeads(): Promise<Lead[]> {
 export async function fetchLiveCheckins(): Promise<Checkin[]> {
   try {
     const today = new Date().toISOString().split("T")[0];
-    const { data, error } = await supabase
+
+    // Fetch workers (checkin_enabled employees)
+    const { data: employees, error: empError } = await supabase
+      .from("employees")
+      .select("id, name")
+      .eq("company_id", COMPANY_ID)
+      .eq("checkin_enabled", true)
+      .eq("is_active", true);
+
+    if (empError || !employees) return [];
+
+    // Fetch today's checkins
+    const { data: checkins, error: ciError } = await supabase
       .from("checkins")
       .select("*")
       .eq("company_id", COMPANY_ID)
       .eq("checkin_date", today);
 
-    if (error || !data) return [];
+    const checkinRows = (!ciError && checkins) ? checkins : [];
 
-    return data.map((c: Record<string, unknown>) => ({
-      employee: String(c.employee || ""),
-      status: c.responded_at ? "checked_in" as const : "waiting" as const,
-      summary: c.summary ? String(c.summary) : undefined,
-      time: c.responded_at
-        ? new Date(String(c.responded_at)).toLocaleTimeString("nb-NO", { hour: "2-digit", minute: "2-digit" })
-        : undefined,
-    }));
+    // Build a lookup: employee_id → checkin row
+    const checkinByEmpId = new Map<string, Record<string, unknown>>();
+    for (const c of checkinRows) {
+      checkinByEmpId.set(String(c.employee_id), c as Record<string, unknown>);
+    }
+
+    // One entry per worker: matched checkin or "waiting"
+    return employees.map((emp: Record<string, unknown>) => {
+      const firstName = String(emp.name || "").split(" ")[0];
+      const c = checkinByEmpId.get(String(emp.id));
+      if (c && c.responded_at) {
+        return {
+          employee: firstName,
+          status: "checked_in" as const,
+          summary: c.planned_tasks ? String(c.planned_tasks) : undefined,
+          time: new Date(String(c.responded_at)).toLocaleTimeString("nb-NO", { hour: "2-digit", minute: "2-digit" }),
+        };
+      }
+      return {
+        employee: firstName,
+        status: "waiting" as const,
+      };
+    });
   } catch {
     return [];
   }

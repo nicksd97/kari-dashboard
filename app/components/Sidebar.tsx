@@ -23,6 +23,7 @@ function timeAgo(dateStr: string): string {
 }
 
 export default function Sidebar({ checkins: rawCheckins, checklistEntries: rawEntries }: SidebarProps) {
+  console.log("[Sidebar] checkins received:", rawCheckins);
   const checkins = rawCheckins || [];
   const checklistEntries = rawEntries || [];
   const pending = checklistEntries.filter((c) => c.status !== "completed");
