@@ -483,14 +483,13 @@ function Leaderboard({ scores }: { scores: EmployeeScore[] }) {
           {sorted.map((s, i) => {
             const isFirst = i === 0 && s.total > 0;
             const color = EMPLOYEE_COLORS[s.employee] || "#999";
-            const barPct = maxScore > 0 ? (s.total / maxScore) * 100 : 0;
 
             return (
               <div
                 key={s.employee}
-                className="relative rounded-lg transition-all"
+                className="relative flex flex-col items-center rounded-lg transition-all"
                 style={{
-                  padding: isFirst ? "12px 14px" : "10px 14px",
+                  padding: isFirst ? "16px 14px 14px" : "12px 14px 10px",
                   border: isFirst ? "1px solid #E5A940" : "1px solid var(--card-border)",
                   backgroundColor: isFirst ? "rgba(229, 169, 64, 0.04)" : "var(--card-bg)",
                 }}
@@ -498,84 +497,88 @@ function Leaderboard({ scores }: { scores: EmployeeScore[] }) {
                 {/* Confetti dots for #1 */}
                 {isFirst && (
                   <>
-                    <div className="absolute" style={{ top: 4, right: 12, width: 4, height: 4, borderRadius: 2, backgroundColor: "#E5A940", opacity: 0.5 }} />
-                    <div className="absolute" style={{ top: 10, right: 24, width: 3, height: 3, borderRadius: 2, backgroundColor: "#F5D590", opacity: 0.6 }} />
-                    <div className="absolute" style={{ top: 6, right: 36, width: 3, height: 3, borderRadius: 2, backgroundColor: "#E5A940", opacity: 0.35 }} />
-                    <div className="absolute" style={{ bottom: 8, right: 16, width: 3, height: 3, borderRadius: 2, backgroundColor: "#F5D590", opacity: 0.5 }} />
-                    <div className="absolute" style={{ bottom: 5, right: 30, width: 4, height: 4, borderRadius: 2, backgroundColor: "#E5A940", opacity: 0.3 }} />
+                    <div className="absolute" style={{ top: 6, right: 14, width: 4, height: 4, borderRadius: 2, backgroundColor: "#E5A940", opacity: 0.5 }} />
+                    <div className="absolute" style={{ top: 14, right: 26, width: 3, height: 3, borderRadius: 2, backgroundColor: "#F5D590", opacity: 0.6 }} />
+                    <div className="absolute" style={{ top: 8, left: 18, width: 3, height: 3, borderRadius: 2, backgroundColor: "#E5A940", opacity: 0.35 }} />
+                    <div className="absolute" style={{ top: 16, left: 30, width: 3, height: 3, borderRadius: 2, backgroundColor: "#F5D590", opacity: 0.5 }} />
+                    <div className="absolute" style={{ bottom: 10, right: 20, width: 4, height: 4, borderRadius: 2, backgroundColor: "#E5A940", opacity: 0.3 }} />
+                    <div className="absolute" style={{ bottom: 8, left: 16, width: 3, height: 3, borderRadius: 2, backgroundColor: "#F5D590", opacity: 0.4 }} />
                   </>
                 )}
 
-                <div className="flex items-center gap-3">
-                  {/* Rank number */}
-                  <span
-                    className="shrink-0 text-[12px] font-bold"
-                    style={{ color: isFirst ? "#E5A940" : "var(--muted-light)", width: 14, textAlign: "center" }}
-                  >
-                    {isFirst ? "\u2B50" : `${i + 1}.`}
-                  </span>
+                {/* Crown/star above avatar for #1 */}
+                {isFirst && (
+                  <div className="text-[14px] mb-0.5" style={{ lineHeight: 1 }}>
+                    &#x1F451;
+                  </div>
+                )}
 
-                  {/* Avatar */}
-                  <div className="relative shrink-0">
+                {/* Avatar with rank badge for #2/#3 */}
+                <div className="relative">
+                  <div
+                    className="flex items-center justify-center rounded-full font-bold text-white"
+                    style={{
+                      width: isFirst ? 48 : 36,
+                      height: isFirst ? 48 : 36,
+                      fontSize: isFirst ? 18 : 14,
+                      backgroundColor: color,
+                      border: isFirst ? "3px solid #E5A940" : "none",
+                    }}
+                  >
+                    {s.employee[0]}
+                  </div>
+                  {!isFirst && (
                     <div
-                      className="flex items-center justify-center rounded-full text-[13px] font-bold text-white"
+                      className="absolute flex items-center justify-center rounded-full text-[9px] font-bold"
                       style={{
-                        width: isFirst ? 36 : 28,
-                        height: isFirst ? 36 : 28,
-                        backgroundColor: color,
-                        border: isFirst ? "2px solid #E5A940" : "none",
+                        width: 16,
+                        height: 16,
+                        top: -4,
+                        right: -4,
+                        backgroundColor: "var(--card-bg)",
+                        border: "1px solid var(--card-border)",
+                        color: "var(--muted)",
                       }}
                     >
-                      {s.employee[0]}
+                      {i + 1}
                     </div>
-                  </div>
-
-                  {/* Name + score */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span
-                        className="text-[13px] font-semibold truncate"
-                        style={{ color: "var(--foreground)" }}
-                      >
-                        {s.employee}
-                      </span>
-                      <span
-                        className="text-[13px] font-bold"
-                        style={{ color: isFirst ? "#E5A940" : "var(--muted)" }}
-                      >
-                        {s.total}
-                      </span>
-                      <span className="text-[10px]" style={{ color: "var(--muted-light)" }}>
-                        poeng
-                      </span>
-                    </div>
-
-                    {isFirst && (
-                      <p className="text-[10px] font-medium" style={{ color: "#CF952F" }}>
-                        M&aring;nedens leder
-                      </p>
-                    )}
-
-                    {/* Score bar */}
-                    <div className="mt-1.5 rounded-full overflow-hidden" style={{ height: 4, backgroundColor: "var(--divider)" }}>
-                      <div
-                        className="h-full rounded-full transition-all"
-                        style={{
-                          width: `${barPct}%`,
-                          backgroundColor: isFirst ? "#E5A940" : color,
-                          opacity: isFirst ? 1 : 0.6,
-                        }}
-                      />
-                    </div>
-                  </div>
+                  )}
                 </div>
 
-                {/* Breakdown for #1 */}
+                {/* Name */}
+                <p
+                  className="mt-1.5 text-center font-semibold"
+                  style={{ fontSize: isFirst ? 14 : 13, color: "var(--foreground)" }}
+                >
+                  {s.employee}
+                </p>
+
+                {/* Score */}
+                <p className="text-center" style={{ marginTop: 1 }}>
+                  <span
+                    className="font-bold"
+                    style={{ fontSize: isFirst ? 16 : 13, color: isFirst ? "#E5A940" : "var(--muted)" }}
+                  >
+                    {s.total}
+                  </span>{" "}
+                  <span className="text-[10px]" style={{ color: "var(--muted-light)" }}>
+                    poeng
+                  </span>
+                </p>
+
+                {/* Leader label for #1 */}
                 {isFirst && (
-                  <div className="mt-2 flex gap-3 text-[10px]" style={{ color: "var(--muted-light)", marginLeft: 50 }}>
+                  <p className="mt-0.5 text-[10px] font-semibold" style={{ color: "#CF952F" }}>
+                    M&aring;nedens leder
+                  </p>
+                )}
+
+                {/* Stats breakdown for #1 */}
+                {isFirst && (
+                  <div className="mt-1.5 flex gap-2 text-[10px]" style={{ color: "var(--muted-light)" }}>
                     <span>{s.checkinCount} innsjekk.</span>
-                    {s.onTimeCount > 0 && <span>{s.onTimeCount} tidlig</span>}
-                    {s.checklistCount > 0 && <span>{s.checklistCount} sjekklister</span>}
+                    {s.onTimeCount > 0 && <span>&middot; {s.onTimeCount} tidlig</span>}
+                    {s.checklistCount > 0 && <span>&middot; {s.checklistCount} sjekklister</span>}
                   </div>
                 )}
               </div>
