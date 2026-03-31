@@ -400,7 +400,9 @@ function FolderBrowser({
 
 function PdfViewer({ file, onClose }: { file: DriveFile; onClose: () => void }) {
   const [failed, setFailed] = useState(false);
-  const src = file.downloadUrl || `/api/graph/files/${file.id}/content`;
+  // Always use our proxy for the iframe — avoids X-Frame-Options: deny from OneDrive
+  const src = `/api/graph/files/${file.id}/content?inline=true`;
+  // Direct download uses the pre-authenticated OneDrive URL when available
   const downloadHref = file.downloadUrl || `/api/graph/files/${file.id}/content`;
 
   return (

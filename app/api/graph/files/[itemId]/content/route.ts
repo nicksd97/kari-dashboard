@@ -1,7 +1,7 @@
 import { getFileStream } from "@/lib/msgraph";
 
 export async function GET(
-  _req: Request,
+  req: Request,
   ctx: { params: Promise<{ itemId: string }> }
 ) {
   try {
@@ -12,14 +12,23 @@ export async function GET(
       return new Response("Filen ble ikke funnet", { status: graphRes.status });
     }
 
-    return new Response(graphRes.body, {
-      status: 200,
-      headers: {
-        "Content-Type": graphRes.headers.get("Content-Type") || "application/octet-stream",
-        "Content-Disposition": graphRes.headers.get("Content-Disposition") || "attachment",
-        "Cache-Control": "private, max-age=300",
-      },
-    });
+    const url = new URL(req.url);
+    const inline = url.searchParams.get("inline") === "true";
+    const contentType = graphRes.headers.get("Content-Type") || "application/octet-stream";
+    const contentLength = graphRes.headers.get("Content-Length");
+
+    const headers: Record<string, string> = {
+      "Content-Type": contentType,
+      "Content-Disposition": inline ? "inline" : (graphRes.headers.get("Content-Disposition") || "attachment"),
+      "Cache-Control": "private, max-age=300",
+    };
+
+    if (contentLength) {
+      headers["Content-Length"] = contentLength;
+    }
+
+    // Stream the response body directly — no buffering
+    return new Response(graphRes.body, { status: 200, headers });
   } catch (e) {
     console.error("[graph/files/content]", e);
     return new Response("Feil ved nedlasting", { status: 500 });
