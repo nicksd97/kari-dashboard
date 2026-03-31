@@ -243,9 +243,9 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
   const minDate = allDates.sort()[0];
   const maxDate = allDates.sort().reverse()[0];
 
-  // Tight range: start of earliest month → latest date + 14 days
+  // Range: 2 weeks before earliest date → 2 weeks after latest date
   const rangeStart = new Date(minDate);
-  rangeStart.setDate(1);
+  rangeStart.setDate(rangeStart.getDate() - 14);
   const rangeEnd = new Date(maxDate);
   rangeEnd.setDate(rangeEnd.getDate() + 14);
 
@@ -290,7 +290,7 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
 
   for (const emp of [...EMPLOYEES, "Ikke tildelt"]) {
     const group = grouped[emp];
-    if (group.length === 0 && emp !== "Ikke tildelt") continue;
+    if (group.length === 0) continue;
     if (groupIdx > 0) y += GROUP_GAP;
     headers.push({ label: emp, color: EMPLOYEE_COLORS[emp] || "#999", y });
     y += EMP_HEADER;
@@ -311,7 +311,7 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
     });
   }
 
-  const totalHeight = Math.max(500, y + 20);
+  const totalHeight = Math.max(300, y + 20);
 
   // Hover handlers
   const POPUP_HEIGHT_EST = 420;
@@ -585,21 +585,6 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
           </div>
         ))}
 
-        {/* ── Row backgrounds (alternating) ── */}
-        {rows.map((row) => (
-          <div
-            key={`bg-${row.project.project_number}`}
-            className="absolute"
-            style={{
-              top: MONTH_BAR + row.y,
-              left: 0,
-              right: 0,
-              height: ROW_HEIGHT,
-              backgroundColor: row.rowIndex % 2 === 1 ? "var(--row-alt)" : "var(--card-bg)",
-            }}
-          />
-        ))}
-
         {/* ── Project rows ── */}
         {rows.map((row) => {
           const p = row.project;
@@ -640,7 +625,7 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
 
           const startPct = dateToPct(p.start_date);
           const endPct = dateToPct(p.estimated_end_date);
-          const widthPct = Math.max(2, endPct - startPct);
+          const widthPct = endPct - startPct;
           const isFerdig = p.status === "ferdig";
           const isHovered = hoveredProject === p.project_number;
           const bs = getBarStyle(p, today);
@@ -681,7 +666,7 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
                   className="absolute flex items-center gap-1.5 px-2.5 cursor-pointer transition-shadow duration-100 overflow-hidden whitespace-nowrap"
                   style={{
                     left: `${startPct}%`,
-                    width: `${widthPct}%`,
+                    width: widthPct > 0 ? `${widthPct}%` : undefined,
                     height: BAR_HEIGHT,
                     top: (ROW_HEIGHT - BAR_HEIGHT) / 2,
                     backgroundColor: bs.bg,
@@ -689,7 +674,7 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
                     borderRadius: 6,
                     color: bs.textColor,
                     boxShadow: isHovered ? "0 2px 8px rgba(0,0,0,0.10)" : "none",
-                    minWidth: 24,
+                    minWidth: 120,
                   }}
                   onMouseEnter={(e) => handleBarEnter(p.project_number, e)}
                   onMouseMove={handleBarMouseMove}
