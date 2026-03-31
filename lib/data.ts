@@ -175,10 +175,14 @@ export async function fetchLiveProjects(): Promise<Project[]> {
   try {
     const { data, error } = await supabase
       .from("projects")
-      .select("*")
+      .select("*, employees!assigned_to(name)")
       .eq("company_id", COMPANY_ID);
 
     if (error || !data) return [];
+
+    console.log("[fetchLiveProjects] raw data:", JSON.stringify(data.map((p: Record<string, unknown>) => ({
+      project_number: p.project_number, start_date: p.start_date, estimated_end_date: p.estimated_end_date, assigned_to: p.assigned_to, employees: p.employees,
+    }))));
 
     return await Promise.all(
       data.map(async (p: Record<string, unknown>) => {
@@ -186,6 +190,10 @@ export async function fetchLiveProjects(): Promise<Project[]> {
           .from("checklists")
           .select("*")
           .eq("project_id", p.id);
+
+        // Resolve employee name from FK join
+        const empData = p.employees as { name: string } | null;
+        const assignedName = empData?.name?.split(" ")[0] || undefined;
 
         return {
           project_number: String(p.project_number || ""),
@@ -195,7 +203,7 @@ export async function fetchLiveProjects(): Promise<Project[]> {
           start_date: p.start_date ? String(p.start_date) : undefined,
           estimated_end_date: p.estimated_end_date ? String(p.estimated_end_date) : undefined,
           agreed_price: p.agreed_price ? Number(p.agreed_price) : undefined,
-          assigned: p.assigned ? String(p.assigned) : undefined,
+          assigned: assignedName,
           dependency: p.dependency ? String(p.dependency) : undefined,
           checklists: checklists?.map((c: Record<string, unknown>) => ({
             name: String(c.name || ""),

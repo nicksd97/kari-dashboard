@@ -752,7 +752,7 @@ function HoverPopup({
 
   const dep = p.dependency ? projects.find((pr) => pr.project_number === p.dependency) : null;
   const duration =
-    p.start_date && p.estimated_end_date ? daysBetween(p.start_date, p.estimated_end_date) : null;
+    p.start_date && p.estimated_end_date ? Math.max(1, daysBetween(p.start_date, p.estimated_end_date)) : null;
 
   const isFerdig = p.status === "ferdig";
   const allChecklistsPassed =
@@ -831,7 +831,7 @@ function HoverPopup({
             <div><span style={{ color: "var(--muted-light)" }}>Pris: </span>{formatPrice(p.agreed_price)}</div>
           )}
           {duration != null && (
-            <div><span style={{ color: "var(--muted-light)" }}>Varighet: </span>{duration} dager</div>
+            <div><span style={{ color: "var(--muted-light)" }}>Varighet: </span>{duration} {duration === 1 ? "dag" : "dager"}</div>
           )}
         </div>
       </div>
