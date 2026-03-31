@@ -14,12 +14,13 @@ interface TimelineProps {
 }
 
 const EMPLOYEES = ["Roar", "Andrii", "Marci"];
-const LEFT_COL = 200;
-const ROW_HEIGHT = 44;
-const BAR_HEIGHT = 28;
-const EMP_HEADER = 36;
-const MONTH_BAR = 48;
-const GROUP_GAP = 8;
+const LEFT_COL = 240;
+const ROW_HEIGHT = 40;
+const BAR_HEIGHT = 24;
+const EMP_HEADER = 32;
+const HEADER_HEIGHT = 56; // month row + day row
+const MONTH_ROW = 24;
+const DAY_ROW = 32;
 
 // --- Utilities ---
 
@@ -45,7 +46,17 @@ function formatPrice(n: number) {
   }).format(n);
 }
 
-// --- Bar colors: blue/amber/coral/gray/white ---
+/** Get the Monday of the week containing a date */
+function getMonday(d: Date): Date {
+  const result = new Date(d);
+  const day = result.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  result.setDate(result.getDate() + diff);
+  result.setHours(0, 0, 0, 0);
+  return result;
+}
+
+// --- Bar colors ---
 
 interface BarStyle {
   bg: string;
@@ -55,69 +66,31 @@ interface BarStyle {
 }
 
 function getBarStyle(p: Project, today: string): BarStyle {
-  // Completed → light gray, flat
   if (p.status === "ferdig") {
-    return {
-      bg: "#E0E0E0",
-      border: "1px solid #D0D0D0",
-      textColor: "#777",
-      showStatusPill: false,
-    };
+    return { bg: "#BDBDBD", border: "1px solid #A8A8A8", textColor: "#fff", showStatusPill: false };
   }
-
-  // Not started → white + dashed
   if (
     p.status === "innkommende" ||
     p.status === "planlegging" ||
     (p.start_date && p.start_date > today)
   ) {
-    return {
-      bg: "#ffffff",
-      border: "1px dashed #D0D0D0",
-      textColor: "#555",
-      showStatusPill: true,
-    };
+    return { bg: "#ffffff", border: "1px dashed #C0C0C0", textColor: "#555", showStatusPill: true };
   }
-
-  // Overdue → coral
-  const overdue =
-    p.estimated_end_date &&
-    p.estimated_end_date < today &&
-    p.status !== "ferdig";
+  const overdue = p.estimated_end_date && p.estimated_end_date < today && p.status !== "ferdig";
   if (overdue) {
-    return {
-      bg: "#E06050",
-      border: "1px solid #C9503F",
-      textColor: "#fff",
-      showStatusPill: false,
-    };
+    return { bg: "#E06050", border: "1px solid #C9503F", textColor: "#fff", showStatusPill: false };
   }
-
-  // Needs attention → amber
   const nearDeadline =
     p.estimated_end_date &&
     daysBetween(today, p.estimated_end_date) <= 5 &&
     daysBetween(today, p.estimated_end_date) >= 0;
-
   if (p.status === "venter kunde" || nearDeadline) {
-    return {
-      bg: "#E5A940",
-      border: "1px solid #CF952F",
-      textColor: "#fff",
-      showStatusPill: false,
-    };
+    return { bg: "#E5A940", border: "1px solid #CF952F", textColor: "#fff", showStatusPill: false };
   }
-
-  // Active → clean blue
-  return {
-    bg: "#4A90D9",
-    border: "1px solid #3D7CC0",
-    textColor: "#fff",
-    showStatusPill: false,
-  };
+  return { bg: "#4A90D9", border: "1px solid #3D7CC0", textColor: "#fff", showStatusPill: false };
 }
 
-// --- Stage workflow logic (unchanged from before) ---
+// --- Stage workflow logic ---
 
 type StageKey = 1 | 2 | 3;
 
@@ -234,31 +207,72 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
   const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const safeProjects = projects || [];
-
   const datedProjects = safeProjects.filter((p) => p.start_date && p.estimated_end_date);
   const today = new Date().toISOString().split("T")[0];
 
-  const allDates = datedProjects.flatMap((p) => [p.start_date!, p.estimated_end_date!]);
-  allDates.push(today);
-  const minDate = allDates.sort()[0];
-  const maxDate = allDates.sort().reverse()[0];
+  // --- Timeline range: 2 weeks before today → 4 weeks after latest end (or 6 weeks from today) ---
+  const allProjectDates = datedProjects.flatMap((p) => [p.start_date!, p.estimated_end_date!]);
+  const latestDate = allProjectDates.length > 0
+    ? allProjectDates.sort().reverse()[0]
+    : today;
 
-  // Range: 2 weeks before earliest date → 2 weeks after latest date
-  const rangeStart = new Date(minDate);
-  rangeStart.setDate(rangeStart.getDate() - 14);
-  const rangeEnd = new Date(maxDate);
-  rangeEnd.setDate(rangeEnd.getDate() + 14);
+  const rangeStartDate = new Date(today);
+  rangeStartDate.setDate(rangeStartDate.getDate() - 14);
+  const rangeStart = getMonday(rangeStartDate);
+
+  const latestEnd = new Date(latestDate);
+  latestEnd.setDate(latestEnd.getDate() + 28);
+  const minEnd = new Date(today);
+  minEnd.setDate(minEnd.getDate() + 42);
+  const rangeEndDate = latestEnd > minEnd ? latestEnd : minEnd;
+  // Snap to end of week (Sunday)
+  const rangeEnd = new Date(rangeEndDate);
+  const endDay = rangeEnd.getDay();
+  if (endDay !== 0) rangeEnd.setDate(rangeEnd.getDate() + (7 - endDay));
 
   const rangeStartStr = rangeStart.toISOString().split("T")[0];
   const rangeEndStr = rangeEnd.toISOString().split("T")[0];
   const totalDays = Math.max(1, daysBetween(rangeStartStr, rangeEndStr));
 
-  // Returns percentage (0–100) of timeline width
   function dateToPct(date: string) {
     return (daysBetween(rangeStartStr, date) / totalDays) * 100;
   }
 
-  // Group by employee
+  // --- Build weeks array ---
+  const weeks: { monday: Date; dateStr: string; pct: number; month: string; dayLabel: string }[] = [];
+  const wCur = new Date(rangeStart);
+  while (wCur < rangeEnd) {
+    const ds = wCur.toISOString().split("T")[0];
+    weeks.push({
+      monday: new Date(wCur),
+      dateStr: ds,
+      pct: dateToPct(ds),
+      month: wCur.toLocaleDateString("nb-NO", { month: "short" }).replace(".", ""),
+      dayLabel: String(wCur.getDate()),
+    });
+    wCur.setDate(wCur.getDate() + 7);
+  }
+
+  // --- Build month spans from weeks ---
+  const monthSpans: { label: string; startPct: number; endPct: number }[] = [];
+  let curMonthKey = "";
+  for (let i = 0; i < weeks.length; i++) {
+    const w = weeks[i];
+    const mKey = w.monday.getFullYear() + "-" + w.monday.getMonth();
+    const mLabel = w.monday.toLocaleDateString("nb-NO", { month: "long" });
+    const capLabel = mLabel.charAt(0).toUpperCase() + mLabel.slice(1);
+    const nextPct = i < weeks.length - 1 ? weeks[i + 1].pct : 100;
+    if (mKey !== curMonthKey) {
+      monthSpans.push({ label: capLabel, startPct: w.pct, endPct: nextPct });
+      curMonthKey = mKey;
+    } else {
+      monthSpans[monthSpans.length - 1].endPct = nextPct;
+    }
+  }
+
+  const todayPct = dateToPct(today);
+
+  // --- Group by employee ---
   const grouped: Record<string, Project[]> = {};
   for (const emp of EMPLOYEES) grouped[emp] = [];
   grouped["Ikke tildelt"] = [];
@@ -268,52 +282,34 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
   }
   const undated = safeProjects.filter((p) => !p.start_date || !p.estimated_end_date);
 
-  // Month labels (only months that overlap with the range)
-  const months: { label: string; pct: number }[] = [];
-  const cur = new Date(rangeStart);
-  while (cur < rangeEnd) {
-    const d = cur.toISOString().split("T")[0];
-    months.push({
-      label: cur.toLocaleDateString("nb-NO", { month: "short", year: "numeric" }),
-      pct: dateToPct(d),
-    });
-    cur.setMonth(cur.getMonth() + 1);
-  }
-
-  const todayPct = dateToPct(today);
-
-  // Simple layout: one row per project, stacked under each employee
+  // --- Layout rows ---
   let y = 0;
-  let groupIdx = 0;
-  const rows: { project: Project; y: number; rowIndex: number }[] = [];
+  const rows: { project: Project; y: number }[] = [];
   const headers: { label: string; color: string; y: number }[] = [];
 
   for (const emp of [...EMPLOYEES, "Ikke tildelt"]) {
     const group = grouped[emp];
     if (group.length === 0) continue;
-    if (groupIdx > 0) y += GROUP_GAP;
     headers.push({ label: emp, color: EMPLOYEE_COLORS[emp] || "#999", y });
     y += EMP_HEADER;
-    group.forEach((p, i) => {
-      rows.push({ project: p, y, rowIndex: i });
+    group.forEach((p) => {
+      rows.push({ project: p, y });
       y += ROW_HEIGHT;
     });
-    groupIdx++;
   }
 
   if (undated.length > 0) {
-    if (groupIdx > 0) y += GROUP_GAP;
     headers.push({ label: "Uten dato", color: "#999", y });
     y += EMP_HEADER;
-    undated.forEach((p, i) => {
-      rows.push({ project: p, y, rowIndex: i });
+    undated.forEach((p) => {
+      rows.push({ project: p, y });
       y += ROW_HEIGHT;
     });
   }
 
-  const totalHeight = Math.max(300, y + 20);
+  const totalHeight = Math.max(200, y);
 
-  // Hover handlers
+  // --- Hover handlers ---
   const POPUP_HEIGHT_EST = 420;
   const POPUP_WIDTH = 380;
 
@@ -351,70 +347,34 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
     ? safeProjects.find((p) => p.project_number === hoveredProject)
     : null;
 
-  // Empty state (must be after all hooks to avoid React error #300)
+  // --- Empty state ---
   if (safeProjects.length === 0) {
     const activeCheckins = (checkins || []).filter((c) => c.status === "checked_in");
-
     return (
       <div
         className="rounded-xl"
-        style={{
-          border: "1px solid var(--card-border)",
-          backgroundColor: "var(--card-bg)",
-          minHeight: 400,
-        }}
+        style={{ border: "1px solid var(--card-border)", backgroundColor: "var(--card-bg)", minHeight: 400 }}
       >
-        {/* "Aktive i dag" cards from checkin data */}
         {activeCheckins.length > 0 && (
           <div className="p-5 pb-3">
-            <p
-              className="text-[11px] font-semibold uppercase mb-3"
-              style={{ color: "var(--muted-light)", letterSpacing: "0.04em" }}
-            >
+            <p className="text-[11px] font-semibold uppercase mb-3" style={{ color: "var(--muted-light)", letterSpacing: "0.04em" }}>
               Aktive i dag
             </p>
             <div className="flex gap-3 flex-wrap">
               {activeCheckins.map((c) => {
                 const empColor = EMPLOYEE_COLORS[c.employee] || "#4A90D9";
                 return (
-                  <div
-                    key={c.employee}
-                    className="flex items-start gap-3 rounded-lg"
-                    style={{
-                      border: "1px solid var(--card-border)",
-                      backgroundColor: "var(--surface)",
-                      padding: "12px 16px",
-                      flex: "1 1 200px",
-                      maxWidth: 340,
-                    }}
-                  >
-                    <div
-                      className="flex shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white mt-0.5"
-                      style={{ width: 22, height: 22, backgroundColor: empColor }}
-                    >
+                  <div key={c.employee} className="flex items-start gap-3 rounded-lg" style={{ border: "1px solid var(--card-border)", backgroundColor: "var(--surface)", padding: "12px 16px", flex: "1 1 200px", maxWidth: 340 }}>
+                    <div className="flex shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white mt-0.5" style={{ width: 22, height: 22, backgroundColor: empColor }}>
                       {c.employee[0]}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="text-[13px] font-semibold" style={{ color: "var(--foreground)" }}>
-                          {c.employee}
-                        </span>
-                        {c.projectNumber && (
-                          <span className="text-[11px] font-medium" style={{ color: "var(--muted-light)" }}>
-                            #{c.projectNumber}
-                          </span>
-                        )}
-                        {c.time && (
-                          <span className="ml-auto text-[10px]" style={{ color: "var(--muted-light)" }}>
-                            kl. {c.time}
-                          </span>
-                        )}
+                        <span className="text-[13px] font-semibold" style={{ color: "var(--foreground)" }}>{c.employee}</span>
+                        {c.projectNumber && <span className="text-[11px] font-medium" style={{ color: "var(--muted-light)" }}>#{c.projectNumber}</span>}
+                        {c.time && <span className="ml-auto text-[10px]" style={{ color: "var(--muted-light)" }}>kl. {c.time}</span>}
                       </div>
-                      {c.summary && (
-                        <p className="mt-1 text-[12px] leading-snug" style={{ color: "var(--muted)" }}>
-                          {c.summary}
-                        </p>
-                      )}
+                      {c.summary && <p className="mt-1 text-[12px] leading-snug" style={{ color: "var(--muted)" }}>{c.summary}</p>}
                     </div>
                   </div>
                 );
@@ -422,285 +382,294 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
             </div>
           </div>
         )}
-
-        {/* Empty timeline message */}
-        <div
-          className="flex flex-col items-center justify-center"
-          style={{ minHeight: activeCheckins.length > 0 ? 200 : 400 }}
-        >
+        <div className="flex flex-col items-center justify-center" style={{ minHeight: activeCheckins.length > 0 ? 200 : 400 }}>
           <svg width="48" height="48" viewBox="0 0 48 48" fill="none" style={{ color: "var(--muted-light)", opacity: 0.5 }}>
             <rect x="4" y="12" width="40" height="4" rx="2" fill="currentColor" />
             <rect x="4" y="22" width="28" height="4" rx="2" fill="currentColor" />
             <rect x="4" y="32" width="34" height="4" rx="2" fill="currentColor" />
           </svg>
-          <p className="mt-4 text-[15px] font-semibold" style={{ color: "var(--foreground)" }}>
-            Ingen prosjekter enn&aring;
-          </p>
-          <p className="mt-1 text-[13px]" style={{ color: "var(--muted-light)" }}>
-            Prosjekter vil vises her n&aring;r de opprettes
-          </p>
+          <p className="mt-4 text-[15px] font-semibold" style={{ color: "var(--foreground)" }}>Ingen prosjekter enn&aring;</p>
+          <p className="mt-1 text-[13px]" style={{ color: "var(--muted-light)" }}>Prosjekter vil vises her n&aring;r de opprettes</p>
         </div>
       </div>
     );
   }
 
+  // ===================== RENDER =====================
   return (
     <div
       ref={containerRef}
-      className="relative rounded-xl"
-      style={{
-        border: "1px solid var(--card-border)",
-        backgroundColor: "var(--card-bg)",
-        minHeight: 500,
-      }}
+      className="rounded-xl overflow-hidden"
+      style={{ border: "1px solid var(--card-border)", backgroundColor: "var(--card-bg)" }}
     >
-      <div className="relative" style={{ height: totalHeight + MONTH_BAR }}>
+      {/* Scrollable timeline area */}
+      <div className="overflow-x-auto">
+        <div style={{ minWidth: 900 }}>
 
-        {/* ── Month header bar ── */}
-        <div
-          className="sticky top-0 z-10 flex"
-          style={{
-            height: MONTH_BAR,
-            borderBottom: "1px solid var(--divider)",
-            backgroundColor: "var(--card-bg)",
-          }}
-        >
-          {/* Left column header */}
-          <div
-            className="shrink-0 flex items-end pb-2.5 pl-4 text-[11px] font-medium"
-            style={{
-              width: LEFT_COL,
-              color: "var(--muted-light)",
-              borderRight: "1px solid var(--divider)",
-            }}
-          >
-            Prosjekt
-          </div>
-
-          {/* Timeline header area (months + I dag pill) */}
-          <div className="relative flex-1">
-            {/* "I dag" pill */}
+          {/* ── Two-row header: months + day numbers ── */}
+          <div className="sticky top-0 z-10 flex" style={{ borderBottom: "1px solid #E0E0E0", backgroundColor: "var(--card-bg)" }}>
+            {/* Left column header */}
             <div
-              className="absolute z-30 -translate-x-1/2"
-              style={{ left: `${todayPct}%`, top: 4 }}
+              className="shrink-0 flex items-end pb-2 pl-5 text-[11px] font-semibold uppercase"
+              style={{ width: LEFT_COL, color: "var(--muted-light)", borderRight: "1px solid #E0E0E0", height: HEADER_HEIGHT, letterSpacing: "0.04em" }}
             >
-              <span
-                className="rounded-full px-2 py-0.5 text-[9px] font-semibold whitespace-nowrap"
-                style={{ backgroundColor: "#E8655020", color: "#E06050" }}
-              >
-                I dag
-              </span>
+              Prosjekt
             </div>
 
-            {months.map((m, i) => {
-              const nextPct = i < months.length - 1 ? months[i + 1].pct : 100;
-              return (
+            {/* Timeline header */}
+            <div className="relative flex-1" style={{ height: HEADER_HEIGHT }}>
+              {/* Month row */}
+              {monthSpans.map((m) => (
                 <div
                   key={m.label}
-                  className="absolute flex items-end pb-2.5 pl-2"
-                  style={{
-                    left: `${m.pct}%`,
-                    width: `${nextPct - m.pct}%`,
-                    top: 0,
-                    height: MONTH_BAR,
-                  }}
+                  className="absolute flex items-center pl-2"
+                  style={{ left: `${m.startPct}%`, width: `${m.endPct - m.startPct}%`, top: 0, height: MONTH_ROW, borderLeft: "1px solid #E0E0E0" }}
                 >
-                  <span
-                    className="text-[11px] font-medium whitespace-nowrap"
-                    style={{ color: "var(--muted-light)", letterSpacing: "0.03em" }}
-                  >
+                  <span className="text-[11px] font-semibold whitespace-nowrap" style={{ color: "var(--muted)", letterSpacing: "0.02em" }}>
                     {m.label}
                   </span>
                 </div>
-              );
-            })}
-          </div>
-        </div>
+              ))}
 
-        {/* ── Body: left column + timeline area ── */}
-        <div className="absolute flex" style={{ top: MONTH_BAR, left: 0, right: 0, height: totalHeight }}>
-
-          {/* Left column area (for border) */}
-          <div
-            className="shrink-0 relative"
-            style={{ width: LEFT_COL, borderRight: "1px solid var(--divider)" }}
-          />
-
-          {/* Timeline area (gridlines, today line, bars) */}
-          <div className="relative flex-1">
-            {/* Vertical gridlines */}
-            {months.map((m) => (
-              <div
-                key={`g-${m.label}`}
-                className="absolute pointer-events-none"
-                style={{
-                  left: `${m.pct}%`,
-                  top: 0,
-                  width: 1,
-                  height: totalHeight,
-                  backgroundColor: "#F0F0F0",
-                }}
-              />
-            ))}
-
-            {/* "I dag" line */}
-            <div
-              className="absolute z-20 pointer-events-none"
-              style={{
-                left: `${todayPct}%`,
-                top: 0,
-                width: 1,
-                height: totalHeight,
-                backgroundColor: "#E06050",
-                opacity: 0.6,
-              }}
-            />
-          </div>
-        </div>
-
-        {/* ── Employee headers (full width) ── */}
-        {headers.map((h) => (
-          <div
-            key={h.label}
-            className="absolute flex items-center gap-2 px-4"
-            style={{
-              top: MONTH_BAR + h.y,
-              left: 0,
-              right: 0,
-              height: EMP_HEADER,
-              backgroundColor: "var(--card-bg)",
-              borderBottom: "1px solid var(--divider)",
-            }}
-          >
-            <span
-              className="rounded-full"
-              style={{ width: 6, height: 6, backgroundColor: h.color }}
-            />
-            <span
-              className="text-[12px] font-medium"
-              style={{ color: "var(--foreground)" }}
-            >
-              {h.label}
-            </span>
-          </div>
-        ))}
-
-        {/* ── Project rows ── */}
-        {rows.map((row) => {
-          const p = row.project;
-
-          // Undated: show name + status badge only, no bar
-          if (!p.start_date || !p.estimated_end_date) {
-            return (
-              <div
-                key={p.project_number}
-                className="absolute flex items-center"
-                style={{ top: MONTH_BAR + row.y, left: 0, right: 0, height: ROW_HEIGHT }}
-              >
-                <div className="shrink-0 truncate pl-4 pr-3 text-[12px]" style={{ width: LEFT_COL }}>
-                  <span style={{ color: "var(--muted-light)" }}>#{p.project_number}</span>{" "}
-                  <span style={{ color: "var(--foreground)" }}>{p.name}</span>
-                  {p.dependency && (
-                    <span className="ml-1 text-[10px] italic" style={{ color: "#999" }}>
-                      &larr; etter #{p.dependency}
-                    </span>
-                  )}
-                </div>
-                <div className="relative flex-1" style={{ height: ROW_HEIGHT }}>
-                  <span
-                    className="absolute rounded-full px-2 py-0.5 text-[10px] font-medium"
+              {/* Week day-number row */}
+              {weeks.map((w, i) => {
+                const nextPct = i < weeks.length - 1 ? weeks[i + 1].pct : 100;
+                const isFirstOfMonth = i === 0 || w.monday.getMonth() !== weeks[i - 1].monday.getMonth();
+                return (
+                  <div
+                    key={w.dateStr}
+                    className="absolute flex items-center justify-center"
                     style={{
-                      top: (ROW_HEIGHT - 20) / 2,
-                      left: 8,
-                      backgroundColor: STATUS_COLORS_SOFT[p.status] || "#eee",
-                      color: "#555",
+                      left: `${w.pct}%`,
+                      width: `${nextPct - w.pct}%`,
+                      top: MONTH_ROW,
+                      height: DAY_ROW,
+                      borderLeft: `1px solid ${isFirstOfMonth ? "#E0E0E0" : "#F0F0F0"}`,
                     }}
                   >
-                    {STATUS_LABELS[p.status] || p.status}
-                  </span>
-                </div>
-              </div>
-            );
-          }
-
-          const startPct = dateToPct(p.start_date);
-          const endPct = dateToPct(p.estimated_end_date);
-          const widthPct = endPct - startPct;
-          const isFerdig = p.status === "ferdig";
-          const isHovered = hoveredProject === p.project_number;
-          const bs = getBarStyle(p, today);
-
-          return (
-            <div
-              key={p.project_number}
-              className="absolute flex items-center"
-              style={{ top: MONTH_BAR + row.y, left: 0, right: 0, height: ROW_HEIGHT }}
-            >
-              {/* Left label + dependency text */}
-              <div
-                className="shrink-0 truncate pl-4 pr-3 text-[12px]"
-                style={{ width: LEFT_COL }}
-              >
-                <span style={{ color: "var(--muted-light)", fontWeight: 400 }}>
-                  #{p.project_number}
-                </span>{" "}
-                <span
-                  style={{
-                    color: isFerdig ? "var(--muted-light)" : "var(--foreground)",
-                    fontWeight: 400,
-                    textDecoration: isFerdig ? "line-through" : "none",
-                  }}
-                >
-                  {p.name}
-                </span>
-                {p.dependency && (
-                  <span className="ml-1 text-[10px] italic" style={{ color: "#999" }}>
-                    &larr; #{p.dependency}
-                  </span>
-                )}
-              </div>
-
-              {/* Timeline area for this row */}
-              <div className="relative flex-1" style={{ height: ROW_HEIGHT }}>
-                <div
-                  className="absolute flex items-center gap-1.5 px-2.5 cursor-pointer transition-shadow duration-100 overflow-hidden whitespace-nowrap"
-                  style={{
-                    left: `${startPct}%`,
-                    width: widthPct > 0 ? `${widthPct}%` : undefined,
-                    height: BAR_HEIGHT,
-                    top: (ROW_HEIGHT - BAR_HEIGHT) / 2,
-                    backgroundColor: bs.bg,
-                    border: isHovered ? "1px solid rgba(0,0,0,0.25)" : bs.border,
-                    borderRadius: 6,
-                    color: bs.textColor,
-                    boxShadow: isHovered ? "0 2px 8px rgba(0,0,0,0.10)" : "none",
-                    minWidth: 120,
-                  }}
-                  onMouseEnter={(e) => handleBarEnter(p.project_number, e)}
-                  onMouseMove={handleBarMouseMove}
-                  onMouseLeave={handleBarLeave}
-                >
-                  <span className="text-[11px] font-medium truncate">{p.name}</span>
-                  {bs.showStatusPill && (
-                    <span
-                      className="ml-auto shrink-0 rounded-full px-1.5 py-px text-[9px] font-medium"
-                      style={{
-                        backgroundColor: STATUS_COLORS_SOFT[p.status] || "#eee",
-                        color: "#555",
-                      }}
-                    >
-                      {STATUS_LABELS[p.status] || p.status}
+                    <span className="text-[10px] font-medium" style={{ color: "var(--muted-light)" }}>
+                      {w.dayLabel}
                     </span>
-                  )}
-                </div>
+                  </div>
+                );
+              })}
+
+              {/* "I dag" dot in header */}
+              <div className="absolute z-30 -translate-x-1/2" style={{ left: `${todayPct}%`, bottom: 2 }}>
+                <div className="rounded-full" style={{ width: 6, height: 6, backgroundColor: "#E06050" }} />
               </div>
             </div>
-          );
-        })}
+          </div>
 
+          {/* ── Body ── */}
+          <div className="relative flex" style={{ height: totalHeight }}>
+            {/* Left column */}
+            <div className="shrink-0" style={{ width: LEFT_COL, borderRight: "1px solid #E0E0E0" }}>
+              {/* Employee headers */}
+              {headers.map((h) => (
+                <div
+                  key={h.label}
+                  className="absolute flex items-center gap-2 pl-5"
+                  style={{
+                    top: h.y,
+                    left: 0,
+                    width: LEFT_COL,
+                    height: EMP_HEADER,
+                    backgroundColor: "#FAFAFA",
+                    borderBottom: "1px solid #F0F0F0",
+                  }}
+                >
+                  <span className="rounded-full" style={{ width: 8, height: 8, backgroundColor: h.color }} />
+                  <span className="text-[12px] font-semibold" style={{ color: "var(--foreground)" }}>
+                    {h.label}
+                  </span>
+                </div>
+              ))}
+
+              {/* Project labels in left column */}
+              {rows.map((row) => {
+                const p = row.project;
+                const isFerdig = p.status === "ferdig";
+                return (
+                  <div
+                    key={`label-${p.project_number}`}
+                    className="absolute flex items-center pl-5 pr-3"
+                    style={{ top: row.y, width: LEFT_COL, height: ROW_HEIGHT, borderBottom: "1px solid #F5F5F5" }}
+                  >
+                    <div className="truncate text-[12px]">
+                      <span style={{ color: "var(--muted-light)" }}>#{p.project_number}</span>{" "}
+                      <span style={{ color: isFerdig ? "var(--muted-light)" : "var(--foreground)", textDecoration: isFerdig ? "line-through" : "none" }}>
+                        {p.name}
+                      </span>
+                      {p.dependency && (
+                        <span className="ml-1 text-[10px] italic" style={{ color: "#999" }}>
+                          &larr; #{p.dependency}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Timeline area */}
+            <div className="relative flex-1">
+              {/* Week gridlines */}
+              {weeks.map((w, i) => {
+                const isFirstOfMonth = i === 0 || w.monday.getMonth() !== weeks[i - 1].monday.getMonth();
+                return (
+                  <div
+                    key={`grid-${w.dateStr}`}
+                    className="absolute pointer-events-none"
+                    style={{
+                      left: `${w.pct}%`,
+                      top: 0,
+                      width: 1,
+                      height: totalHeight,
+                      backgroundColor: isFirstOfMonth ? "#E0E0E0" : "#F0F0F0",
+                    }}
+                  />
+                );
+              })}
+
+              {/* Today highlight column */}
+              {(() => {
+                // Find which week today falls in
+                let todayWeekIdx = -1;
+                for (let i = 0; i < weeks.length; i++) {
+                  const wStart = weeks[i].dateStr;
+                  const wEnd = i < weeks.length - 1 ? weeks[i + 1].dateStr : rangeEndStr;
+                  if (today >= wStart && today < wEnd) { todayWeekIdx = i; break; }
+                }
+                if (todayWeekIdx >= 0) {
+                  const wPct = weeks[todayWeekIdx].pct;
+                  const nextPct = todayWeekIdx < weeks.length - 1 ? weeks[todayWeekIdx + 1].pct : 100;
+                  return (
+                    <div
+                      className="absolute pointer-events-none"
+                      style={{
+                        left: `${wPct}%`,
+                        width: `${nextPct - wPct}%`,
+                        top: 0,
+                        height: totalHeight,
+                        backgroundColor: "rgba(224, 96, 80, 0.04)",
+                      }}
+                    />
+                  );
+                }
+                return null;
+              })()}
+
+              {/* Today line */}
+              <div
+                className="absolute z-20 pointer-events-none"
+                style={{ left: `${todayPct}%`, top: 0, width: 1, height: totalHeight, backgroundColor: "#E06050" }}
+              />
+
+              {/* Employee header backgrounds in timeline area */}
+              {headers.map((h) => (
+                <div
+                  key={`hdr-bg-${h.label}`}
+                  className="absolute"
+                  style={{
+                    top: h.y,
+                    left: 0,
+                    right: 0,
+                    height: EMP_HEADER,
+                    backgroundColor: "#FAFAFA",
+                    borderBottom: "1px solid #F0F0F0",
+                  }}
+                />
+              ))}
+
+              {/* Row bottom borders */}
+              {rows.map((row) => (
+                <div
+                  key={`border-${row.project.project_number}`}
+                  className="absolute pointer-events-none"
+                  style={{ top: row.y + ROW_HEIGHT - 1, left: 0, right: 0, height: 1, backgroundColor: "#F5F5F5" }}
+                />
+              ))}
+
+              {/* Project bars */}
+              {rows.map((row) => {
+                const p = row.project;
+                if (!p.start_date || !p.estimated_end_date) {
+                  return (
+                    <div
+                      key={p.project_number}
+                      className="absolute flex items-center pl-2"
+                      style={{ top: row.y, left: 0, right: 0, height: ROW_HEIGHT }}
+                    >
+                      <span
+                        className="rounded px-2 py-0.5 text-[10px] font-medium"
+                        style={{ backgroundColor: STATUS_COLORS_SOFT[p.status] || "#eee", color: "#555" }}
+                      >
+                        {STATUS_LABELS[p.status] || p.status}
+                      </span>
+                    </div>
+                  );
+                }
+
+                const startPct = dateToPct(p.start_date);
+                const endPct = dateToPct(p.estimated_end_date);
+                const widthPct = endPct - startPct;
+                const isHovered = hoveredProject === p.project_number;
+                const bs = getBarStyle(p, today);
+                const empColor = EMPLOYEE_COLORS[p.assigned || ""] || null;
+
+                return (
+                  <div
+                    key={p.project_number}
+                    className="absolute flex items-center"
+                    style={{ top: row.y, left: 0, right: 0, height: ROW_HEIGHT }}
+                  >
+                    <div
+                      className="absolute flex items-center gap-1.5 px-2 cursor-pointer transition-shadow overflow-hidden whitespace-nowrap"
+                      style={{
+                        left: `${startPct}%`,
+                        width: widthPct > 0 ? `${widthPct}%` : undefined,
+                        minWidth: 80,
+                        height: BAR_HEIGHT,
+                        top: (ROW_HEIGHT - BAR_HEIGHT) / 2,
+                        backgroundColor: bs.bg,
+                        border: isHovered ? "1px solid rgba(0,0,0,0.3)" : bs.border,
+                        borderRadius: 4,
+                        color: bs.textColor,
+                        boxShadow: isHovered ? "0 2px 8px rgba(0,0,0,0.12)" : "none",
+                      }}
+                      onMouseEnter={(e) => handleBarEnter(p.project_number, e)}
+                      onMouseMove={handleBarMouseMove}
+                      onMouseLeave={handleBarLeave}
+                    >
+                      {/* Employee initial circle */}
+                      {empColor && (
+                        <div
+                          className="flex shrink-0 items-center justify-center rounded-full text-[8px] font-bold text-white"
+                          style={{ width: 18, height: 18, backgroundColor: empColor }}
+                        >
+                          {(p.assigned || "?")[0]}
+                        </div>
+                      )}
+                      <span className="text-[11px] font-medium truncate">{p.name}</span>
+                      {bs.showStatusPill && (
+                        <span
+                          className="ml-auto shrink-0 rounded px-1.5 py-px text-[9px] font-medium"
+                          style={{ backgroundColor: STATUS_COLORS_SOFT[p.status] || "#eee", color: "#555" }}
+                        >
+                          {STATUS_LABELS[p.status] || p.status}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* ── Hover popup (fixed positioning, outside scroll container) ── */}
+      {/* Hover popup */}
       {hoveredData && (
         <HoverPopup
           project={hoveredData}
@@ -783,10 +752,7 @@ function HoverPopup({
 
         {p.assigned && (
           <div className="mb-3 flex items-center gap-2 text-[13px]" style={{ color: "var(--muted)" }}>
-            <span
-              className="rounded-full"
-              style={{ width: 8, height: 8, backgroundColor: EMPLOYEE_COLORS[p.assigned] || "#888" }}
-            />
+            <span className="rounded-full" style={{ width: 8, height: 8, backgroundColor: EMPLOYEE_COLORS[p.assigned] || "#888" }} />
             <span className="font-medium">{p.assigned}</span>
           </div>
         )}
@@ -798,9 +764,7 @@ function HoverPopup({
               #{dep.project_number} {dep.name}
             </span>
             {dep.status !== "ferdig" && (
-              <span className="ml-1 font-medium" style={{ color: "#E5A940" }}>
-                (ikke ferdig)
-              </span>
+              <span className="ml-1 font-medium" style={{ color: "#E5A940" }}>(ikke ferdig)</span>
             )}
           </p>
         )}
@@ -823,7 +787,6 @@ function HoverPopup({
 
       {/* Stage workflow */}
       <div className="px-5 pt-4 pb-3" style={{ borderTop: "1px solid var(--divider)" }}>
-        {/* Stage indicators with line connectors */}
         <div className="flex items-center mb-4">
           {stages.map((s, i) => {
             const state = getStageState(s, activeStage, allChecklistsPassed, isFerdig);
@@ -845,10 +808,9 @@ function HoverPopup({
                   onClick={() => setViewingStage(s)}
                 >
                   <div
-                    className="flex items-center justify-center rounded-full text-[11px] font-semibold transition-all duration-100"
+                    className="flex items-center justify-center rounded-full text-[11px] font-semibold"
                     style={{
-                      width: 24,
-                      height: 24,
+                      width: 24, height: 24,
                       backgroundColor: bg,
                       border: `2px solid ${borderCol}`,
                       color: text,
@@ -857,15 +819,10 @@ function HoverPopup({
                   >
                     {state === "completed" ? "\u2713" : s}
                   </div>
-                  <span
-                    className="text-[10px] font-medium"
-                    style={{ color: isViewing ? "var(--foreground)" : "var(--muted-light)" }}
-                  >
+                  <span className="text-[10px] font-medium" style={{ color: isViewing ? "var(--foreground)" : "var(--muted-light)" }}>
                     {STAGE_LABELS[s]}
                   </span>
                 </button>
-
-                {/* Chevron connector */}
                 {i < 2 && (
                   <svg width="16" height="10" viewBox="0 0 16 10" className="-mt-3.5 mx-0.5" style={{ opacity: 0.3 }}>
                     <path d="M2,1 L8,5 L2,9" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -876,12 +833,8 @@ function HoverPopup({
           })}
         </div>
 
-        {/* Items */}
         <div className="mb-1">
-          <p
-            className="text-[10px] font-semibold uppercase mb-1.5"
-            style={{ color: "var(--muted-light)", letterSpacing: "0.04em" }}
-          >
+          <p className="text-[10px] font-semibold uppercase mb-1.5" style={{ color: "var(--muted-light)", letterSpacing: "0.04em" }}>
             {viewingStage}. {STAGE_LABELS[viewingStage]}
           </p>
           {STAGE_ITEMS[viewingStage].map((item, idx) => {
@@ -899,13 +852,7 @@ function HoverPopup({
                     <circle cx="7" cy="7" r="5.5" fill="none" stroke="#D0D0D0" strokeWidth="1" />
                   </svg>
                 )}
-                <span
-                  className="text-[12px]"
-                  style={{
-                    color: done ? "var(--muted-light)" : "var(--foreground)",
-                    textDecoration: done ? "line-through" : "none",
-                  }}
-                >
+                <span className="text-[12px]" style={{ color: done ? "var(--muted-light)" : "var(--foreground)", textDecoration: done ? "line-through" : "none" }}>
                   {item}
                 </span>
                 {linked && (
@@ -920,14 +867,10 @@ function HoverPopup({
       </div>
 
       {showWarning && (
-        <div
-          className="mx-5 mb-4 rounded-lg px-3 py-2 text-[11px] font-medium"
-          style={{ backgroundColor: "#FEF3C7", color: "#92400E" }}
-        >
+        <div className="mx-5 mb-4 rounded-lg px-3 py-2 text-[11px] font-medium" style={{ backgroundColor: "#FEF3C7", color: "#92400E" }}>
           Sjekklister m&aring; godkjennes f&oslash;r prosjektet kan lukkes
         </div>
       )}
-
       <div style={{ height: 4 }} />
     </div>
   );
