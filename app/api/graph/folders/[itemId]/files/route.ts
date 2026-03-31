@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listFiles } from "@/lib/msgraph";
+import { listFolderContents } from "@/lib/msgraph";
 
 export const revalidate = 60;
 
@@ -9,8 +9,8 @@ export async function GET(
 ) {
   try {
     const { itemId } = await ctx.params;
-    const files = await listFiles(itemId);
-    return NextResponse.json({ files });
+    const items = await listFolderContents(itemId);
+    return NextResponse.json({ items });
   } catch (e) {
     console.error("[graph/folders/files]", e);
     return NextResponse.json(

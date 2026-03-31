@@ -145,6 +145,7 @@ export async function listSubfolders(
 }
 
 export interface DriveFile {
+  type: "file";
   id: string;
   name: string;
   size: number;
@@ -154,21 +155,40 @@ export interface DriveFile {
   downloadUrl?: string;
 }
 
-export async function listFiles(folderId: string): Promise<DriveFile[]> {
+export interface DriveFolder {
+  type: "folder";
+  id: string;
+  name: string;
+  childCount: number;
+}
+
+export type DriveItem = DriveFile | DriveFolder;
+
+export async function listFolderContents(folderId: string): Promise<DriveItem[]> {
   const data = await graphJson<GraphChildren>(
-    `${driveItem(folderId)}/children?$select=id,name,size,lastModifiedDateTime,webUrl,file&$top=200`
+    `${driveItem(folderId)}/children?$select=id,name,size,lastModifiedDateTime,webUrl,file,folder&$top=200`
   );
-  return data.value
-    .filter((item) => item.file)
-    .map((item) => ({
+  return data.value.map((item): DriveItem => {
+    if (item.folder) {
+      return { type: "folder", id: item.id, name: item.name, childCount: item.folder.childCount };
+    }
+    return {
+      type: "file",
       id: item.id,
       name: item.name,
       size: item.size || 0,
-      mimeType: item.file!.mimeType,
+      mimeType: item.file?.mimeType || "application/octet-stream",
       lastModified: item.lastModifiedDateTime || "",
       webUrl: item.webUrl || "",
       downloadUrl: item["@microsoft.graph.downloadUrl"],
-    }));
+    };
+  });
+}
+
+// Keep old function name for backward compat
+export async function listFiles(folderId: string): Promise<DriveFile[]> {
+  const items = await listFolderContents(folderId);
+  return items.filter((i): i is DriveFile => i.type === "file");
 }
 
 export async function getFileStream(itemId: string): Promise<Response> {
