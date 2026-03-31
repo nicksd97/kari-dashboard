@@ -825,7 +825,7 @@ function HoverPopup({
             <div><span style={{ color: "var(--muted-light)" }}>Start: </span>{formatDate(p.start_date)}</div>
           )}
           {p.estimated_end_date && (
-            <div><span style={{ color: "var(--muted-light)" }}>Slutt: </span>{formatDate(p.estimated_end_date)}</div>
+            <div><span style={{ color: "var(--muted-light)" }}>Slutt: </span>{p.end_date_defaulted ? "Ikke estimert" : formatDate(p.estimated_end_date)}</div>
           )}
           {p.agreed_price != null && (
             <div><span style={{ color: "var(--muted-light)" }}>Pris: </span>{formatPrice(p.agreed_price)}</div>

@@ -12,6 +12,7 @@ export interface Project {
   customer_name?: string;
   start_date?: string;
   estimated_end_date?: string;
+  end_date_defaulted?: boolean;
   agreed_price?: number;
   assigned?: string;
   dependency?: string;
