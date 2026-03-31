@@ -14,6 +14,7 @@ import {
 import StatCards from "./StatCards";
 import Timeline from "./Timeline";
 import LeadPipeline from "./LeadPipeline";
+import ProjectsList from "./ProjectsList";
 import Sidebar from "./Sidebar";
 
 type Tab = "timeline" | "leads";
@@ -231,7 +232,10 @@ export default function Dashboard() {
           {/* Content */}
           <div className="flex-1">
             {tab === "timeline" ? (
-              <Timeline projects={projects} checkins={checkins} />
+              <>
+                <Timeline projects={projects} checkins={checkins} />
+                <ProjectsList projects={projects} />
+              </>
             ) : (
               <LeadPipeline leads={leads} />
             )}
