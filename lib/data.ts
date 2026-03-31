@@ -368,25 +368,32 @@ export async function fetchLiveScores(): Promise<EmployeeScore[]> {
       .eq("checkin_enabled", true)
       .eq("is_active", true);
 
-    if (empErr || !employees || employees.length === 0) return DEMO_SCORES;
+    if (empErr || !employees || employees.length === 0) {
+      console.log("[fetchLiveScores] no employees found, error:", empErr);
+      return [];
+    }
 
-    const { data: checkins } = await supabase
+    const { data: checkins, error: ciErr } = await supabase
       .from("checkins")
       .select("employee_id, responded_at, status")
       .eq("company_id", COMPANY_ID)
       .gte("checkin_date", monthStart)
       .lte("checkin_date", monthEnd);
 
-    const { data: checklists } = await supabase
+    // Checklists query: use * to avoid column name mismatches
+    const { data: checklists, error: clErr } = await supabase
       .from("checklists")
-      .select("completed_by, done, total, completed_at")
+      .select("*")
       .eq("company_id", COMPANY_ID)
       .not("completed_at", "is", null)
       .gte("completed_at", monthStart + "T00:00:00")
       .lte("completed_at", monthEnd + "T23:59:59");
 
     const ciRows = checkins || [];
-    const clRows = checklists || [];
+    const clRows = (checklists || []) as Record<string, unknown>[];
+
+    console.log("[fetchLiveScores] checkins:", ciRows.length, "error:", ciErr);
+    console.log("[fetchLiveScores] checklists:", clRows.length, "error:", clErr);
 
     const scores: EmployeeScore[] = employees.map((emp: Record<string, unknown>) => {
       const firstName = String(emp.name || "").split(" ")[0];
@@ -395,23 +402,30 @@ export async function fetchLiveScores(): Promise<EmployeeScore[]> {
       const empCheckins = ciRows.filter((c) => String(c.employee_id) === empId && c.status === "responded");
       const checkinCount = empCheckins.length;
 
-      // On-time: responded before 09:00 Oslo (use UTC+1/+2 safe cutoff of 08:00 UTC)
+      // On-time: responded before 09:00 Oslo (UTC+1 winter / UTC+2 summer)
+      // March 31 is CEST (UTC+2), so 09:00 Oslo = 07:00 UTC
       const onTimeCount = empCheckins.filter((c) => {
         if (!c.responded_at) return false;
-        return new Date(String(c.responded_at)).getUTCHours() < 8;
+        return new Date(String(c.responded_at)).getUTCHours() < 7;
       }).length;
 
       const empChecklists = clRows.filter((c) => String(c.completed_by) === empId);
       const checklistCount = empChecklists.length;
-      const perfectCount = empChecklists.filter((c) => c.done != null && c.total != null && c.done === c.total).length;
+      // Check for perfect score using whichever column names exist
+      const perfectCount = empChecklists.filter((c) => {
+        const done = c.done ?? c.items_done ?? c.checked;
+        const total = c.total ?? c.items_total ?? c.total_items;
+        return done != null && total != null && done === total;
+      }).length;
 
       const total = (checkinCount * 10) + (onTimeCount * 5) + (checklistCount * 20) + (perfectCount * 10);
       return { employee: firstName, checkinCount, onTimeCount, checklistCount, perfectCount, total };
     });
 
-    if (scores.every((s) => s.total === 0)) return DEMO_SCORES;
+    console.log("[fetchLiveScores] scores:", JSON.stringify(scores));
     return scores.sort((a, b) => b.total - a.total);
-  } catch {
-    return DEMO_SCORES;
+  } catch (e) {
+    console.error("[fetchLiveScores] error:", e);
+    return [];
   }
 }
