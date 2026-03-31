@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, use } from "react";
+import { useEffect, useState, useCallback, useRef, use } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { STATUS_COLORS_SOFT, STATUS_LABELS, EMPLOYEE_COLORS } from "@/lib/types";
@@ -396,66 +396,111 @@ function FolderBrowser({
   );
 }
 
-// --- PDF Viewer Modal ---
+// --- PDF Viewer Modal (pdf.js canvas renderer) ---
 
 function PdfViewer({ file, onClose }: { file: DriveFile; onClose: () => void }) {
-  const [failed, setFailed] = useState(false);
-  // Always use our proxy for the iframe — avoids X-Frame-Options: deny from OneDrive
-  const src = `/api/graph/files/${file.id}/content?inline=true`;
-  // Direct download uses the pre-authenticated OneDrive URL when available
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [pageCount, setPageCount] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
   const downloadHref = file.downloadUrl || `/api/graph/files/${file.id}/content`;
+  const pdfUrl = `/api/graph/files/${file.id}/content?inline=true`;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function render() {
+      try {
+        const pdfjs = await import("pdfjs-dist");
+        pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
+
+        const loadingTask = pdfjs.getDocument(pdfUrl);
+        const pdf = await loadingTask.promise;
+        if (cancelled) return;
+
+        setPageCount(pdf.numPages);
+        setStatus("ready");
+
+        const container = containerRef.current;
+        if (!container) return;
+
+        // Render all pages (or first 30 for very large PDFs)
+        const maxPages = Math.min(pdf.numPages, 30);
+        for (let i = 1; i <= maxPages; i++) {
+          if (cancelled) return;
+          const page = await pdf.getPage(i);
+          const containerWidth = container.clientWidth - 32; // padding
+          const unscaledViewport = page.getViewport({ scale: 1 });
+          const scale = containerWidth / unscaledViewport.width;
+          const viewport = page.getViewport({ scale });
+
+          const canvas = document.createElement("canvas");
+          canvas.width = viewport.width * window.devicePixelRatio;
+          canvas.height = viewport.height * window.devicePixelRatio;
+          canvas.style.width = `${viewport.width}px`;
+          canvas.style.height = `${viewport.height}px`;
+          canvas.style.display = "block";
+          canvas.style.margin = "0 auto 16px";
+          canvas.style.borderRadius = "4px";
+
+          const ctx = canvas.getContext("2d");
+          if (!ctx) continue;
+          ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+          await page.render({ canvasContext: ctx, viewport, canvas } as Parameters<typeof page.render>[0]).promise;
+          if (cancelled) return;
+          container.appendChild(canvas);
+        }
+      } catch (e) {
+        console.error("[PdfViewer] render error:", e);
+        if (!cancelled) setStatus("error");
+      }
+    }
+
+    render();
+    return () => { cancelled = true; };
+  }, [pdfUrl]);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex flex-col"
-      style={{ backgroundColor: "rgba(0,0,0,0.85)" }}
-    >
+    <div className="fixed inset-0 z-50 flex flex-col" style={{ backgroundColor: "rgba(0,0,0,0.92)" }}>
       {/* Toolbar */}
       <div className="flex items-center justify-between px-4 py-3 shrink-0" style={{ backgroundColor: "rgba(0,0,0,0.95)" }}>
-        <a
-          href={downloadHref}
-          download={file.name}
-          className="text-[13px] font-medium px-3 py-1.5 rounded-lg"
-          style={{ backgroundColor: "rgba(255,255,255,0.1)", color: "#fff" }}
-        >
+        <a href={downloadHref} download={file.name} className="text-[13px] font-medium px-3 py-1.5 rounded-lg" style={{ backgroundColor: "rgba(255,255,255,0.1)", color: "#fff" }}>
           Last ned
         </a>
-        <p className="text-[13px] font-medium truncate mx-4 flex-1 text-center" style={{ color: "rgba(255,255,255,0.7)" }}>
-          {file.name}
-        </p>
-        <button
-          onClick={onClose}
-          className="text-[13px] font-medium px-3 py-1.5 rounded-lg cursor-pointer"
-          style={{ backgroundColor: "rgba(255,255,255,0.1)", color: "#fff" }}
-        >
+        <div className="flex-1 mx-3 text-center min-w-0">
+          <p className="text-[13px] font-medium truncate" style={{ color: "rgba(255,255,255,0.7)" }}>{file.name}</p>
+          {status === "ready" && pageCount > 0 && (
+            <p className="text-[10px]" style={{ color: "rgba(255,255,255,0.4)" }}>{pageCount} {pageCount === 1 ? "side" : "sider"}</p>
+          )}
+        </div>
+        <button onClick={onClose} className="text-[13px] font-medium px-3 py-1.5 rounded-lg cursor-pointer" style={{ backgroundColor: "rgba(255,255,255,0.1)", color: "#fff" }}>
           Lukk
         </button>
       </div>
 
-      {/* PDF iframe */}
-      {failed ? (
+      {/* Content area */}
+      {status === "loading" && (
+        <div className="flex-1 flex flex-col items-center justify-center gap-3">
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/20 border-t-white/70" />
+          <p className="text-[13px]" style={{ color: "rgba(255,255,255,0.6)" }}>Laster PDF...</p>
+        </div>
+      )}
+
+      {status === "error" && (
         <div className="flex-1 flex flex-col items-center justify-center gap-4">
-          <p className="text-[15px] font-medium" style={{ color: "rgba(255,255,255,0.7)" }}>
-            Kunne ikke vise PDF
-          </p>
-          <a
-            href={downloadHref}
-            download={file.name}
-            className="text-[13px] font-semibold px-4 py-2 rounded-lg"
-            style={{ backgroundColor: "#E53935", color: "#fff" }}
-          >
+          <p className="text-[15px] font-medium" style={{ color: "rgba(255,255,255,0.7)" }}>Kunne ikke vise PDF</p>
+          <a href={downloadHref} download={file.name} className="text-[13px] font-semibold px-4 py-2 rounded-lg" style={{ backgroundColor: "#E53935", color: "#fff" }}>
             Last ned i stedet
           </a>
         </div>
-      ) : (
-        <iframe
-          src={`${src}#toolbar=1`}
-          className="flex-1 w-full"
-          style={{ border: "none" }}
-          onError={() => setFailed(true)}
-          title={file.name}
-        />
       )}
+
+      {/* Scrollable canvas container */}
+      <div
+        ref={containerRef}
+        className="flex-1 overflow-y-auto px-4 py-4"
+        style={{ display: status === "loading" || status === "error" ? "none" : "block" }}
+      />
     </div>
   );
 }

@@ -11,7 +11,7 @@ interface ProjectsListProps {
 
 const STATUS_FILTERS = [
   { key: "alle", label: "Alle" },
-  { key: "pagaende", label: "P\u00e5g\u00e5ende" },
+  { key: "pagaende", label: "Pågående" },
   { key: "planlegging", label: "Planlegging" },
   { key: "materialer", label: "Materialer" },
   { key: "innkommende", label: "Innkommende" },
@@ -80,7 +80,7 @@ export default function ProjectsList({ projects }: ProjectsListProps) {
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <input
           type="text"
-          placeholder="S\u00f8k prosjekt..."
+          placeholder="Søk prosjekt..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="rounded-lg px-3 py-2 text-[13px] outline-none w-full sm:w-56"
