@@ -613,7 +613,12 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
 
                 const startPct = dateToPct(p.start_date);
                 const endPct = dateToPct(p.estimated_end_date);
-                const widthPct = endPct - startPct;
+                const durationDays = Math.max(1, daysBetween(p.start_date, p.estimated_end_date));
+                // Width is always proportional: at least 1 day wide
+                const oneDayPct = 100 / totalDays;
+                const widthPct = Math.max(oneDayPct, endPct - startPct);
+                // Bar is "narrow" if less than ~4 days — text goes outside
+                const isNarrow = durationDays <= 3;
                 const isHovered = hoveredProject === p.project_number;
                 const bs = getBarStyle(p, today);
                 const empColor = EMPLOYEE_COLORS[p.assigned || ""] || null;
@@ -624,12 +629,12 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
                     className="absolute flex items-center"
                     style={{ top: row.y, left: 0, right: 0, height: ROW_HEIGHT }}
                   >
+                    {/* The bar itself */}
                     <div
-                      className="absolute flex items-center gap-1.5 px-2 cursor-pointer transition-shadow overflow-hidden whitespace-nowrap"
+                      className="absolute flex items-center gap-1 cursor-pointer transition-shadow overflow-hidden whitespace-nowrap"
                       style={{
                         left: `${startPct}%`,
-                        width: widthPct > 0 ? `${widthPct}%` : undefined,
-                        minWidth: 80,
+                        width: `${widthPct}%`,
                         height: BAR_HEIGHT,
                         top: (ROW_HEIGHT - BAR_HEIGHT) / 2,
                         backgroundColor: bs.bg,
@@ -637,6 +642,9 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
                         borderRadius: 4,
                         color: bs.textColor,
                         boxShadow: isHovered ? "0 2px 8px rgba(0,0,0,0.12)" : "none",
+                        paddingLeft: isNarrow ? 3 : 8,
+                        paddingRight: isNarrow ? 3 : 8,
+                        justifyContent: isNarrow ? "center" : "flex-start",
                       }}
                       onMouseEnter={(e) => handleBarEnter(p.project_number, e)}
                       onMouseMove={handleBarMouseMove}
@@ -651,8 +659,11 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
                           {(p.assigned || "?")[0]}
                         </div>
                       )}
-                      <span className="text-[11px] font-medium truncate">{p.name}</span>
-                      {bs.showStatusPill && (
+                      {/* Text inside bar only for wide bars */}
+                      {!isNarrow && (
+                        <span className="text-[11px] font-medium truncate">{p.name}</span>
+                      )}
+                      {!isNarrow && bs.showStatusPill && (
                         <span
                           className="ml-auto shrink-0 rounded px-1.5 py-px text-[9px] font-medium"
                           style={{ backgroundColor: STATUS_COLORS_SOFT[p.status] || "#eee", color: "#555" }}
@@ -661,6 +672,27 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
                         </span>
                       )}
                     </div>
+                    {/* Text label to the right of narrow bars */}
+                    {isNarrow && (
+                      <div
+                        className="absolute flex items-center gap-1.5 whitespace-nowrap pointer-events-none"
+                        style={{
+                          left: `calc(${startPct + widthPct}% + 6px)`,
+                          top: (ROW_HEIGHT - BAR_HEIGHT) / 2,
+                          height: BAR_HEIGHT,
+                        }}
+                      >
+                        <span className="text-[11px] font-medium" style={{ color: "var(--foreground)" }}>{p.name}</span>
+                        {bs.showStatusPill && (
+                          <span
+                            className="rounded px-1.5 py-px text-[9px] font-medium"
+                            style={{ backgroundColor: STATUS_COLORS_SOFT[p.status] || "#eee", color: "#555" }}
+                          >
+                            {STATUS_LABELS[p.status] || p.status}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
