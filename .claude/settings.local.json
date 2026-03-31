@@ -16,7 +16,11 @@
       "Read(//c/Users/NickDavidson/kari-dashboard/$HOME/**)",
       "Read(//c/Users/NickDavidson/kari-dashboard/$USERPROFILE/**)",
       "Bash(ls -la /c/Users/NickDavidson/.*)",
-      "Bash(ls -d /c/Users/NickDavidson/.*)"
+      "Bash(ls -d /c/Users/NickDavidson/.*)",
+      "Bash(npx vercel:*)",
+      "Bash(mkdir -p app/api/graph/projects/[number]/folders)",
+      "Bash(mkdir -p app/api/graph/folders/[itemId]/files)",
+      "Bash(mkdir -p app/api/graph/files/[itemId]/content)"
     ]
   }
 }

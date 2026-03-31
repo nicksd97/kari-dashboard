@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import Link from "next/link";
 import type { Project, Checklist, Checkin } from "@/lib/types";
 import {
   STATUS_COLORS_SOFT,
@@ -340,11 +341,11 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
               const isFerdig = p.status === "ferdig";
               return (
                 <div key={`lbl-${p.project_number}`} className="absolute flex items-center pl-5 pr-3" style={{ top: row.y, width: LEFT_COL, height: ROW_HEIGHT, borderBottom: "1px solid #F8F8F8" }}>
-                  <div className="truncate text-[12px]">
+                  <Link href={`/project/${p.project_number}`} className="truncate text-[12px] hover:underline">
                     <span style={{ color: "var(--muted-light)" }}>#{p.project_number}</span>{" "}
                     <span style={{ color: isFerdig ? "var(--muted-light)" : "var(--foreground)", textDecoration: isFerdig ? "line-through" : "none" }}>{p.name}</span>
                     {p.dependency && <span className="ml-1 text-[10px] italic" style={{ color: "#999" }}>&larr; #{p.dependency}</span>}
-                  </div>
+                  </Link>
                 </div>
               );
             })}
@@ -557,7 +558,7 @@ function HoverPopup({
       <div className="p-5 pb-0">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
-            <p className="text-[11px]" style={{ color: "var(--muted-light)" }}>#{p.project_number}</p>
+            <Link href={`/project/${p.project_number}`} className="text-[11px] hover:underline" style={{ color: "var(--muted-light)" }}>#{p.project_number}</Link>
             <p className="mt-0.5 text-[15px] font-bold" style={{ color: "var(--foreground)" }}>{p.name}</p>
           </div>
           <span className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold" style={{ backgroundColor: STATUS_COLORS_SOFT[p.status] || "#eee", color: "#444" }}>
