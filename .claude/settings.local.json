@@ -12,7 +12,11 @@
       "Bash(taskkill //F //IM node.exe)",
       "WebFetch(domain:localhost)",
       "Bash(node:*)",
-      "Bash(npx tsx:*)"
+      "Bash(npx tsx:*)",
+      "Read(//c/Users/NickDavidson/kari-dashboard/$HOME/**)",
+      "Read(//c/Users/NickDavidson/kari-dashboard/$USERPROFILE/**)",
+      "Bash(ls -la /c/Users/NickDavidson/.*)",
+      "Bash(ls -d /c/Users/NickDavidson/.*)"
     ]
   }
 }

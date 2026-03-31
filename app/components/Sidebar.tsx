@@ -1,5 +1,7 @@
 "use client";
 
+import { useState, useRef, useCallback, useEffect } from "react";
+import { createPortal } from "react-dom";
 import type { Checkin, ChecklistEntry } from "@/lib/types";
 import { EMPLOYEE_COLORS } from "@/lib/types";
 
@@ -22,6 +24,155 @@ function timeAgo(dateStr: string): string {
   return `${diffDays} dager siden`;
 }
 
+function weekdaysUntil(dateStr: string): number | null {
+  if (!dateStr) return null;
+  const end = new Date(dateStr);
+  if (isNaN(end.getTime())) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  end.setHours(0, 0, 0, 0);
+  if (end <= today) return 0;
+  let count = 0;
+  const cur = new Date(today);
+  cur.setDate(cur.getDate() + 1);
+  while (cur <= end) {
+    const day = cur.getDay();
+    if (day !== 0 && day !== 6) count++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return count;
+}
+
+// --- Tooltip shown via portal ---
+
+function EmployeeTooltip({
+  checkin,
+  anchorRect,
+  onMouseEnter,
+  onMouseLeave,
+}: {
+  checkin: Checkin;
+  anchorRect: DOMRect;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
+}) {
+  const TOOLTIP_W = 240;
+  // Position to the right of the sidebar, aligned with the row
+  let left = anchorRect.right + 8;
+  let top = anchorRect.top;
+  // If it would go off-screen right, show below instead
+  if (left + TOOLTIP_W > window.innerWidth - 12) {
+    left = anchorRect.left;
+    top = anchorRect.bottom + 4;
+  }
+  // Keep within vertical bounds
+  if (top + 160 > window.innerHeight) {
+    top = window.innerHeight - 170;
+  }
+
+  const daysLeft = weekdaysUntil(checkin.estimatedCompletion || "");
+
+  return createPortal(
+    <div
+      className="popup-enter"
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      style={{
+        position: "fixed",
+        left,
+        top,
+        width: TOOLTIP_W,
+        zIndex: 9999,
+        backgroundColor: "var(--card-bg)",
+        borderRadius: 10,
+        boxShadow: "0 4px 20px rgba(0,0,0,0.10)",
+        border: "1px solid var(--card-border)",
+        padding: "12px 14px",
+      }}
+    >
+      {checkin.projectNumber && (
+        <div className="mb-2">
+          <p
+            className="text-[11px] font-medium"
+            style={{ color: "var(--muted-light)" }}
+          >
+            Prosjekt
+          </p>
+          <p
+            className="text-[13px] font-semibold"
+            style={{ color: "var(--foreground)" }}
+          >
+            #{checkin.projectNumber}{" "}
+            {checkin.projectName || ""}
+          </p>
+        </div>
+      )}
+
+      {checkin.summary && (
+        <div className="mb-2">
+          <p
+            className="text-[11px] font-medium"
+            style={{ color: "var(--muted-light)" }}
+          >
+            Planlagt i dag
+          </p>
+          <p
+            className="text-[12px]"
+            style={{ color: "var(--foreground)" }}
+          >
+            {checkin.summary}
+          </p>
+        </div>
+      )}
+
+      {daysLeft != null && (
+        <div className="mb-2">
+          <p
+            className="text-[11px] font-medium"
+            style={{ color: "var(--muted-light)" }}
+          >
+            Gjenstår
+          </p>
+          <p
+            className="text-[12px] font-medium"
+            style={{ color: daysLeft <= 3 ? "#E5A940" : "var(--foreground)" }}
+          >
+            {daysLeft === 0 ? "Ferdig i dag" : `${daysLeft} arbeidsdager`}
+          </p>
+        </div>
+      )}
+
+      {checkin.rawResponse && (
+        <div>
+          <p
+            className="text-[11px] font-medium"
+            style={{ color: "var(--muted-light)" }}
+          >
+            Siste innsjekking
+          </p>
+          <p
+            className="text-[12px] italic"
+            style={{ color: "var(--muted)" }}
+          >
+            &ldquo;
+            {checkin.rawResponse.length > 100
+              ? checkin.rawResponse.slice(0, 100) + "…"
+              : checkin.rawResponse}
+            &rdquo;
+          </p>
+        </div>
+      )}
+
+      {!checkin.projectNumber && !checkin.summary && !checkin.rawResponse && (
+        <p className="text-[12px]" style={{ color: "var(--muted-light)" }}>
+          Venter på innsjekking
+        </p>
+      )}
+    </div>,
+    document.body
+  );
+}
+
 export default function Sidebar({ checkins: rawCheckins, checklistEntries: rawEntries }: SidebarProps) {
   console.log("[Sidebar] checkins received:", rawCheckins);
   const checkins = rawCheckins || [];
@@ -29,6 +180,43 @@ export default function Sidebar({ checkins: rawCheckins, checklistEntries: rawEn
   const pending = checklistEntries.filter((c) => c.status !== "completed");
   const completed = checklistEntries.filter((c) => c.status === "completed");
   const checkedInCount = checkins.filter((c) => c.status === "checked_in").length;
+
+  const [hoveredEmployee, setHoveredEmployee] = useState<string | null>(null);
+  const [tooltipRect, setTooltipRect] = useState<DOMRect | null>(null);
+  const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
+  const handleMouseEnter = useCallback((name: string, el: HTMLElement) => {
+    if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
+    hoverTimeout.current = setTimeout(() => {
+      setHoveredEmployee(name);
+      setTooltipRect(el.getBoundingClientRect());
+    }, 200);
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
+    hoverTimeout.current = setTimeout(() => {
+      setHoveredEmployee(null);
+      setTooltipRect(null);
+    }, 100);
+  }, []);
+
+  const handleTooltipEnter = useCallback(() => {
+    if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
+  }, []);
+
+  const handleTooltipLeave = useCallback(() => {
+    hoverTimeout.current = setTimeout(() => {
+      setHoveredEmployee(null);
+      setTooltipRect(null);
+    }, 100);
+  }, []);
+
+  const hoveredCheckin = hoveredEmployee
+    ? checkins.find((c) => c.employee === hoveredEmployee) || null
+    : null;
 
   return (
     <aside
@@ -41,7 +229,7 @@ export default function Sidebar({ checkins: rawCheckins, checklistEntries: rawEn
     >
       {/* Team section */}
       <div className="px-5 pt-6 pb-4">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-3">
           <h2
             className="text-[11px] font-semibold uppercase"
             style={{ color: "var(--muted-light)", letterSpacing: "0.05em" }}
@@ -52,75 +240,54 @@ export default function Sidebar({ checkins: rawCheckins, checklistEntries: rawEn
             className="text-[11px] font-medium"
             style={{ color: "var(--muted-light)" }}
           >
-            {checkedInCount}/{EMPLOYEES_ORDER.length} innsjekket
+            {checkedInCount}/{EMPLOYEES_ORDER.length}
           </span>
         </div>
 
-        <div className="space-y-1">
+        <div>
           {EMPLOYEES_ORDER.map((name) => {
             const checkin = checkins.find((c) => c.employee === name);
             const color = EMPLOYEE_COLORS[name] || "#999";
+            const isCheckedIn = checkin?.status === "checked_in";
 
             return (
               <div
                 key={name}
-                className="flex items-center gap-3 rounded-lg px-2.5 transition-colors"
-                style={{ height: 40 }}
+                className="flex items-center gap-2.5 rounded-lg px-2 cursor-default"
+                style={{ height: 36 }}
+                onMouseEnter={(e) => handleMouseEnter(name, e.currentTarget)}
+                onMouseLeave={handleMouseLeave}
               >
                 {/* Avatar */}
                 <div
-                  className="flex shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white"
-                  style={{ width: 24, height: 24, backgroundColor: color }}
+                  className="flex shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                  style={{ width: 22, height: 22, backgroundColor: color }}
                 >
                   {name[0]}
                 </div>
 
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className="text-[13px] font-medium"
-                      style={{ color: "var(--foreground)" }}
-                    >
-                      {name}
-                    </span>
-
-                    {checkin?.status === "checked_in" && (
-                      <span
-                        className="rounded-full"
-                        style={{ width: 5, height: 5, backgroundColor: "#22c55e" }}
-                      />
-                    )}
-                    {checkin?.status === "waiting" && (
-                      <span
-                        className="rounded-full"
-                        style={{ width: 5, height: 5, backgroundColor: "#d1d5db" }}
-                      />
-                    )}
-                  </div>
-
-                  {checkin?.status === "checked_in" && checkin.summary && (
-                    <p
-                      className="truncate text-[11px]"
-                      style={{ color: "var(--muted)" }}
-                    >
-                      {checkin.summary}
-                    </p>
-                  )}
-                  {checkin?.status === "waiting" && (
-                    <p className="text-[11px]" style={{ color: "var(--muted-light)" }}>
-                      Venter
-                    </p>
-                  )}
-                  {(!checkin || checkin.status === "off") && (
-                    <p className="text-[11px]" style={{ color: "var(--muted-light)" }}>
-                      {checkin?.label || ""}
-                    </p>
-                  )}
+                {/* Name + dot */}
+                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                  <span
+                    className="text-[13px] font-medium truncate"
+                    style={{ color: "var(--foreground)" }}
+                  >
+                    {name}
+                  </span>
+                  <span
+                    className="shrink-0 rounded-full"
+                    style={{
+                      width: 6,
+                      height: 6,
+                      backgroundColor: isCheckedIn ? "#22c55e" : "#d1d5db",
+                    }}
+                  />
                 </div>
 
+                {/* Time */}
                 {checkin?.time && (
                   <span
-                    className="shrink-0 text-[10px]"
+                    className="shrink-0 text-[11px]"
                     style={{ color: "var(--muted-light)" }}
                   >
                     kl. {checkin.time}
@@ -131,6 +298,16 @@ export default function Sidebar({ checkins: rawCheckins, checklistEntries: rawEn
           })}
         </div>
       </div>
+
+      {/* Tooltip via portal */}
+      {mounted && hoveredEmployee && hoveredCheckin && tooltipRect && (
+        <EmployeeTooltip
+          checkin={hoveredCheckin}
+          anchorRect={tooltipRect}
+          onMouseEnter={handleTooltipEnter}
+          onMouseLeave={handleTooltipLeave}
+        />
+      )}
 
       {/* Divider */}
       <div style={{ height: 1, backgroundColor: "var(--divider)" }} />
@@ -208,7 +385,7 @@ export default function Sidebar({ checkins: rawCheckins, checklistEntries: rawEn
               className="text-[10px] font-semibold uppercase mb-2"
               style={{ color: "var(--muted-light)", letterSpacing: "0.04em" }}
             >
-              Fullført
+              Fullf&oslash;rt
             </p>
             {completed.map((item, i) => (
               <div

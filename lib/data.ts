@@ -98,8 +98,8 @@ export async function fetchLeads(): Promise<{ leads: Lead[]; isLive: boolean }> 
 }
 
 const DEMO_CHECKINS: Checkin[] = [
-  { employee: "Roar", status: "checked_in", summary: "Vika Hustad - Isolasjon", time: "07:14" },
-  { employee: "Andrii", status: "checked_in", summary: "Stavnevegen 31", time: "06:45" },
+  { employee: "Roar", status: "checked_in", summary: "Vika Hustad - Isolasjon", time: "07:14", projectNumber: "802", projectName: "Vika Hustad Isolasjon", rawResponse: "Jobber med isolasjon i dag, ferdig med vegger, starter tak etter lunsj", estimatedCompletion: "2026-04-10" },
+  { employee: "Andrii", status: "checked_in", summary: "Stavnevegen 31", time: "06:45", projectNumber: "767", projectName: "Stavnevegen 31", rawResponse: "Fortsetter med kjøkkenmontering, venter på benkeplate", estimatedCompletion: "2026-04-20" },
   { employee: "Marci", status: "waiting" },
 ];
 
@@ -264,16 +264,39 @@ export async function fetchLiveCheckins(): Promise<Checkin[]> {
       checkinByEmpId.set(String(c.employee_id), c as Record<string, unknown>);
     }
 
+    // Fetch project names for assignments
+    const assignmentNums = checkinRows
+      .map((c) => c.project_assignment)
+      .filter(Boolean);
+    let projectsByNum = new Map<string, string>();
+    if (assignmentNums.length > 0) {
+      const { data: projects } = await supabase
+        .from("projects")
+        .select("project_number, name")
+        .eq("company_id", COMPANY_ID)
+        .in("project_number", assignmentNums);
+      if (projects) {
+        for (const p of projects) {
+          projectsByNum.set(String(p.project_number), String(p.name));
+        }
+      }
+    }
+
     // One entry per worker: matched checkin or "waiting"
     return employees.map((emp: Record<string, unknown>) => {
       const firstName = String(emp.name || "").split(" ")[0];
       const c = checkinByEmpId.get(String(emp.id));
       if (c && c.responded_at) {
+        const projNum = c.project_assignment ? String(c.project_assignment) : undefined;
         return {
           employee: firstName,
           status: "checked_in" as const,
           summary: c.planned_tasks ? String(c.planned_tasks) : undefined,
           time: new Date(String(c.responded_at)).toLocaleTimeString("nb-NO", { hour: "2-digit", minute: "2-digit" }),
+          projectNumber: projNum,
+          projectName: projNum ? projectsByNum.get(projNum) : undefined,
+          rawResponse: c.raw_response ? String(c.raw_response) : undefined,
+          estimatedCompletion: c.estimated_completion ? String(c.estimated_completion) : undefined,
         };
       }
       return {

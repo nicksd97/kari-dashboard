@@ -24,6 +24,10 @@ export interface Checkin {
   summary?: string;
   time?: string;
   label?: string;
+  projectNumber?: string;
+  projectName?: string;
+  rawResponse?: string;
+  estimatedCompletion?: string;
 }
 
 export interface ChecklistEntry {
