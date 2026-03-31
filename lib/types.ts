@@ -53,6 +53,15 @@ export interface Lead {
   address: string;
 }
 
+export interface EmployeeScore {
+  employee: string;
+  checkinCount: number;
+  onTimeCount: number;
+  checklistCount: number;
+  perfectCount: number;
+  total: number;
+}
+
 // Slightly more saturated bar colors
 export const STATUS_COLORS: Record<string, string> = {
   innkommende: "#9CC8F0",

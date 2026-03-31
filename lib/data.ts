@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import type { Project, Lead, Checkin, ChecklistEntry } from "./types";
+import type { Project, Lead, Checkin, ChecklistEntry, EmployeeScore } from "./types";
 
 const COMPANY_ID = "a12dfbf0-a9d6-4786-95fe-6f1678d9d980";
 
@@ -342,5 +342,76 @@ export async function fetchLiveChecklistEntries(): Promise<ChecklistEntry[]> {
     }));
   } catch {
     return [];
+  }
+}
+
+const DEMO_SCORES: EmployeeScore[] = [
+  { employee: "Marci", checkinCount: 7, onTimeCount: 5, checklistCount: 1, perfectCount: 1, total: 135 },
+  { employee: "Andrii", checkinCount: 6, onTimeCount: 4, checklistCount: 0, perfectCount: 0, total: 80 },
+  { employee: "Roar", checkinCount: 3, onTimeCount: 2, checklistCount: 0, perfectCount: 0, total: 40 },
+];
+
+export function getDemoScores(): EmployeeScore[] {
+  return DEMO_SCORES;
+}
+
+export async function fetchLiveScores(): Promise<EmployeeScore[]> {
+  try {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0];
+
+    const { data: employees, error: empErr } = await supabase
+      .from("employees")
+      .select("id, name")
+      .eq("company_id", COMPANY_ID)
+      .eq("checkin_enabled", true)
+      .eq("is_active", true);
+
+    if (empErr || !employees || employees.length === 0) return DEMO_SCORES;
+
+    const { data: checkins } = await supabase
+      .from("checkins")
+      .select("employee_id, responded_at, status")
+      .eq("company_id", COMPANY_ID)
+      .gte("checkin_date", monthStart)
+      .lte("checkin_date", monthEnd);
+
+    const { data: checklists } = await supabase
+      .from("checklists")
+      .select("completed_by, done, total, completed_at")
+      .eq("company_id", COMPANY_ID)
+      .not("completed_at", "is", null)
+      .gte("completed_at", monthStart + "T00:00:00")
+      .lte("completed_at", monthEnd + "T23:59:59");
+
+    const ciRows = checkins || [];
+    const clRows = checklists || [];
+
+    const scores: EmployeeScore[] = employees.map((emp: Record<string, unknown>) => {
+      const firstName = String(emp.name || "").split(" ")[0];
+      const empId = String(emp.id);
+
+      const empCheckins = ciRows.filter((c) => String(c.employee_id) === empId && c.status === "responded");
+      const checkinCount = empCheckins.length;
+
+      // On-time: responded before 09:00 Oslo (use UTC+1/+2 safe cutoff of 08:00 UTC)
+      const onTimeCount = empCheckins.filter((c) => {
+        if (!c.responded_at) return false;
+        return new Date(String(c.responded_at)).getUTCHours() < 8;
+      }).length;
+
+      const empChecklists = clRows.filter((c) => String(c.completed_by) === empId);
+      const checklistCount = empChecklists.length;
+      const perfectCount = empChecklists.filter((c) => c.done != null && c.total != null && c.done === c.total).length;
+
+      const total = (checkinCount * 10) + (onTimeCount * 5) + (checklistCount * 20) + (perfectCount * 10);
+      return { employee: firstName, checkinCount, onTimeCount, checklistCount, perfectCount, total };
+    });
+
+    if (scores.every((s) => s.total === 0)) return DEMO_SCORES;
+    return scores.sort((a, b) => b.total - a.total);
+  } catch {
+    return DEMO_SCORES;
   }
 }

@@ -2,12 +2,13 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
-import type { Checkin, ChecklistEntry } from "@/lib/types";
+import type { Checkin, ChecklistEntry, EmployeeScore } from "@/lib/types";
 import { EMPLOYEE_COLORS } from "@/lib/types";
 
 interface SidebarProps {
   checkins: Checkin[];
   checklistEntries: ChecklistEntry[];
+  scores?: EmployeeScore[];
 }
 
 const EMPLOYEES_ORDER = ["Roar", "Andrii", "Marci"];
@@ -182,7 +183,7 @@ function EmployeeTooltip({
   );
 }
 
-export default function Sidebar({ checkins: rawCheckins, checklistEntries: rawEntries }: SidebarProps) {
+export default function Sidebar({ checkins: rawCheckins, checklistEntries: rawEntries, scores: rawScores }: SidebarProps) {
   console.log("[Sidebar] checkins received:", rawCheckins);
   const checkins = rawCheckins || [];
   const checklistEntries = rawEntries || [];
@@ -442,7 +443,146 @@ export default function Sidebar({ checkins: rawCheckins, checklistEntries: rawEn
             ))}
           </div>
         )}
+
+        {/* Leaderboard section */}
+        <Leaderboard scores={rawScores || []} />
       </div>
     </aside>
+  );
+}
+
+// --- Leaderboard ---
+
+function Leaderboard({ scores }: { scores: EmployeeScore[] }) {
+  const sorted = [...scores].sort((a, b) => b.total - a.total);
+  const monthName = new Date().toLocaleDateString("nb-NO", { month: "long" });
+  const capMonth = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+  const year = new Date().getFullYear();
+
+  if (sorted.length === 0) return null;
+
+  const maxScore = sorted[0].total;
+
+  return (
+    <>
+      <div style={{ height: 1, backgroundColor: "var(--divider)", marginTop: 8 }} />
+      <div className="px-5 pt-4 pb-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2
+            className="text-[11px] font-semibold uppercase"
+            style={{ color: "var(--muted-light)", letterSpacing: "0.05em" }}
+          >
+            M&aring;nedens beste
+          </h2>
+          <span className="text-[11px] font-medium" style={{ color: "var(--muted-light)" }}>
+            {capMonth} {year}
+          </span>
+        </div>
+
+        <div className="space-y-2">
+          {sorted.map((s, i) => {
+            const isFirst = i === 0 && s.total > 0;
+            const color = EMPLOYEE_COLORS[s.employee] || "#999";
+            const barPct = maxScore > 0 ? (s.total / maxScore) * 100 : 0;
+
+            return (
+              <div
+                key={s.employee}
+                className="relative rounded-lg transition-all"
+                style={{
+                  padding: isFirst ? "12px 14px" : "10px 14px",
+                  border: isFirst ? "1px solid #E5A940" : "1px solid var(--card-border)",
+                  backgroundColor: isFirst ? "rgba(229, 169, 64, 0.04)" : "var(--card-bg)",
+                }}
+              >
+                {/* Confetti dots for #1 */}
+                {isFirst && (
+                  <>
+                    <div className="absolute" style={{ top: 4, right: 12, width: 4, height: 4, borderRadius: 2, backgroundColor: "#E5A940", opacity: 0.5 }} />
+                    <div className="absolute" style={{ top: 10, right: 24, width: 3, height: 3, borderRadius: 2, backgroundColor: "#F5D590", opacity: 0.6 }} />
+                    <div className="absolute" style={{ top: 6, right: 36, width: 3, height: 3, borderRadius: 2, backgroundColor: "#E5A940", opacity: 0.35 }} />
+                    <div className="absolute" style={{ bottom: 8, right: 16, width: 3, height: 3, borderRadius: 2, backgroundColor: "#F5D590", opacity: 0.5 }} />
+                    <div className="absolute" style={{ bottom: 5, right: 30, width: 4, height: 4, borderRadius: 2, backgroundColor: "#E5A940", opacity: 0.3 }} />
+                  </>
+                )}
+
+                <div className="flex items-center gap-3">
+                  {/* Rank number */}
+                  <span
+                    className="shrink-0 text-[12px] font-bold"
+                    style={{ color: isFirst ? "#E5A940" : "var(--muted-light)", width: 14, textAlign: "center" }}
+                  >
+                    {isFirst ? "\u2B50" : `${i + 1}.`}
+                  </span>
+
+                  {/* Avatar */}
+                  <div className="relative shrink-0">
+                    <div
+                      className="flex items-center justify-center rounded-full text-[13px] font-bold text-white"
+                      style={{
+                        width: isFirst ? 36 : 28,
+                        height: isFirst ? 36 : 28,
+                        backgroundColor: color,
+                        border: isFirst ? "2px solid #E5A940" : "none",
+                      }}
+                    >
+                      {s.employee[0]}
+                    </div>
+                  </div>
+
+                  {/* Name + score */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className="text-[13px] font-semibold truncate"
+                        style={{ color: "var(--foreground)" }}
+                      >
+                        {s.employee}
+                      </span>
+                      <span
+                        className="text-[13px] font-bold"
+                        style={{ color: isFirst ? "#E5A940" : "var(--muted)" }}
+                      >
+                        {s.total}
+                      </span>
+                      <span className="text-[10px]" style={{ color: "var(--muted-light)" }}>
+                        poeng
+                      </span>
+                    </div>
+
+                    {isFirst && (
+                      <p className="text-[10px] font-medium" style={{ color: "#CF952F" }}>
+                        M&aring;nedens leder
+                      </p>
+                    )}
+
+                    {/* Score bar */}
+                    <div className="mt-1.5 rounded-full overflow-hidden" style={{ height: 4, backgroundColor: "var(--divider)" }}>
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{
+                          width: `${barPct}%`,
+                          backgroundColor: isFirst ? "#E5A940" : color,
+                          opacity: isFirst ? 1 : 0.6,
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Breakdown for #1 */}
+                {isFirst && (
+                  <div className="mt-2 flex gap-3 text-[10px]" style={{ color: "var(--muted-light)", marginLeft: 50 }}>
+                    <span>{s.checkinCount} innsjekk.</span>
+                    {s.onTimeCount > 0 && <span>{s.onTimeCount} tidlig</span>}
+                    {s.checklistCount > 0 && <span>{s.checklistCount} sjekklister</span>}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </>
   );
 }

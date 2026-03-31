@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import type { Project, Lead, Checkin, ChecklistEntry } from "@/lib/types";
+import type { Project, Lead, Checkin, ChecklistEntry, EmployeeScore } from "@/lib/types";
 import {
   fetchLiveProjects,
   fetchLiveLeads,
   fetchLiveCheckins,
   fetchLiveChecklistEntries,
+  fetchLiveScores,
   getDemoData,
+  getDemoScores,
 } from "@/lib/data";
 import StatCards from "./StatCards";
 import Timeline from "./Timeline";
@@ -22,6 +24,7 @@ export default function Dashboard() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [checkins, setCheckins] = useState<Checkin[]>([]);
   const [checklistEntries, setChecklistEntries] = useState<ChecklistEntry[]>([]);
+  const [scores, setScores] = useState<EmployeeScore[]>([]);
   const [source, setSource] = useState<Source>("live");
   const [tab, setTab] = useState<Tab>("timeline");
   const [loading, setLoading] = useState(true);
@@ -29,26 +32,30 @@ export default function Dashboard() {
 
   const loadLive = useCallback(async () => {
     try {
-      const [liveProjects, liveLeads, liveCheckins, liveCl] = await Promise.all([
+      const [liveProjects, liveLeads, liveCheckins, liveCl, liveScores] = await Promise.all([
         fetchLiveProjects().catch(() => []),
         fetchLiveLeads().catch(() => []),
         fetchLiveCheckins().catch(() => []),
         fetchLiveChecklistEntries().catch(() => []),
+        fetchLiveScores().catch(() => []),
       ]);
       const p = Array.isArray(liveProjects) ? liveProjects : [];
       const l = Array.isArray(liveLeads) ? liveLeads : [];
       const ci = Array.isArray(liveCheckins) ? liveCheckins : [];
       const cl = Array.isArray(liveCl) ? liveCl : [];
+      const sc = Array.isArray(liveScores) ? liveScores : [];
       setProjects(p);
       setLeads(l);
       setCheckins(ci);
       setChecklistEntries(cl);
+      setScores(sc);
       return p.length > 0 || l.length > 0;
     } catch {
       setProjects([]);
       setLeads([]);
       setCheckins([]);
       setChecklistEntries([]);
+      setScores([]);
       return false;
     }
   }, []);
@@ -59,6 +66,7 @@ export default function Dashboard() {
     setLeads(demo.leads);
     setCheckins(demo.checkins);
     setChecklistEntries(demo.checklistEntries);
+    setScores(getDemoScores());
   }, []);
 
   // Initial load: always start in live mode
@@ -114,7 +122,7 @@ export default function Dashboard() {
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar checkins={checkins} checklistEntries={checklistEntries} />
+      <Sidebar checkins={checkins} checklistEntries={checklistEntries} scores={scores} />
 
       <main className="flex-1 min-w-0 flex flex-col">
         <div className="mx-auto w-full max-w-[1200px] flex-1 flex flex-col px-6 py-8 sm:px-10">
