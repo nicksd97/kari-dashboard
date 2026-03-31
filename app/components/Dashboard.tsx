@@ -61,18 +61,14 @@ export default function Dashboard() {
     setChecklistEntries(demo.checklistEntries);
   }, []);
 
-  // Initial load: try live first, if empty fall back to demo
+  // Initial load: always start in live mode
   useEffect(() => {
     async function init() {
-      const hasLive = await loadLive();
-      if (!hasLive) {
-        setSource("demo");
-        loadDemo();
-      }
+      await loadLive();
       setLoading(false);
     }
     init();
-  }, [loadLive, loadDemo]);
+  }, [loadLive]);
 
   const handleToggle = useCallback(async () => {
     if (source === "live") {
@@ -227,7 +223,7 @@ export default function Dashboard() {
           {/* Content */}
           <div className="flex-1">
             {tab === "timeline" ? (
-              <Timeline projects={projects} />
+              <Timeline projects={projects} checkins={checkins} />
             ) : (
               <LeadPipeline leads={leads} />
             )}

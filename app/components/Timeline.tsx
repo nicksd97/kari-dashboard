@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import type { Project, Checklist } from "@/lib/types";
+import type { Project, Checklist, Checkin } from "@/lib/types";
 import {
   STATUS_COLORS_SOFT,
   STATUS_LABELS,
@@ -10,6 +10,7 @@ import {
 
 interface TimelineProps {
   projects: Project[];
+  checkins?: Checkin[];
 }
 
 const EMPLOYEES = ["Roar", "Andrii", "Marci"];
@@ -226,7 +227,7 @@ function getChecklistForItem(
 
 // --- Main component ---
 
-export default function Timeline({ projects }: TimelineProps) {
+export default function Timeline({ projects, checkins }: TimelineProps) {
   const [hoveredProject, setHoveredProject] = useState<string | null>(null);
   const [popupPos, setPopupPos] = useState({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
@@ -352,26 +353,93 @@ export default function Timeline({ projects }: TimelineProps) {
 
   // Empty state (must be after all hooks to avoid React error #300)
   if (safeProjects.length === 0) {
+    const activeCheckins = (checkins || []).filter((c) => c.status === "checked_in");
+
     return (
       <div
-        className="flex flex-col items-center justify-center rounded-xl"
+        className="rounded-xl"
         style={{
           border: "1px solid var(--card-border)",
           backgroundColor: "var(--card-bg)",
           minHeight: 400,
         }}
       >
-        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" style={{ color: "var(--muted-light)", opacity: 0.5 }}>
-          <rect x="4" y="12" width="40" height="4" rx="2" fill="currentColor" />
-          <rect x="4" y="22" width="28" height="4" rx="2" fill="currentColor" />
-          <rect x="4" y="32" width="34" height="4" rx="2" fill="currentColor" />
-        </svg>
-        <p className="mt-4 text-[15px] font-semibold" style={{ color: "var(--foreground)" }}>
-          Ingen prosjekter enn&aring;
-        </p>
-        <p className="mt-1 text-[13px]" style={{ color: "var(--muted-light)" }}>
-          Prosjekter vil vises her n&aring;r Kari oppretter dem
-        </p>
+        {/* "Aktive i dag" cards from checkin data */}
+        {activeCheckins.length > 0 && (
+          <div className="p-5 pb-3">
+            <p
+              className="text-[11px] font-semibold uppercase mb-3"
+              style={{ color: "var(--muted-light)", letterSpacing: "0.04em" }}
+            >
+              Aktive i dag
+            </p>
+            <div className="flex gap-3 flex-wrap">
+              {activeCheckins.map((c) => {
+                const empColor = EMPLOYEE_COLORS[c.employee] || "#4A90D9";
+                return (
+                  <div
+                    key={c.employee}
+                    className="flex items-start gap-3 rounded-lg"
+                    style={{
+                      border: "1px solid var(--card-border)",
+                      backgroundColor: "var(--surface)",
+                      padding: "12px 16px",
+                      flex: "1 1 200px",
+                      maxWidth: 340,
+                    }}
+                  >
+                    <div
+                      className="flex shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white mt-0.5"
+                      style={{ width: 22, height: 22, backgroundColor: empColor }}
+                    >
+                      {c.employee[0]}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[13px] font-semibold" style={{ color: "var(--foreground)" }}>
+                          {c.employee}
+                        </span>
+                        {c.projectNumber && (
+                          <span className="text-[11px] font-medium" style={{ color: "var(--muted-light)" }}>
+                            #{c.projectNumber}
+                          </span>
+                        )}
+                        {c.time && (
+                          <span className="ml-auto text-[10px]" style={{ color: "var(--muted-light)" }}>
+                            kl. {c.time}
+                          </span>
+                        )}
+                      </div>
+                      {c.summary && (
+                        <p className="mt-1 text-[12px] leading-snug" style={{ color: "var(--muted)" }}>
+                          {c.summary}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Empty timeline message */}
+        <div
+          className="flex flex-col items-center justify-center"
+          style={{ minHeight: activeCheckins.length > 0 ? 200 : 400 }}
+        >
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none" style={{ color: "var(--muted-light)", opacity: 0.5 }}>
+            <rect x="4" y="12" width="40" height="4" rx="2" fill="currentColor" />
+            <rect x="4" y="22" width="28" height="4" rx="2" fill="currentColor" />
+            <rect x="4" y="32" width="34" height="4" rx="2" fill="currentColor" />
+          </svg>
+          <p className="mt-4 text-[15px] font-semibold" style={{ color: "var(--foreground)" }}>
+            Ingen prosjekter enn&aring;
+          </p>
+          <p className="mt-1 text-[13px]" style={{ color: "var(--muted-light)" }}>
+            Prosjekter vil vises her n&aring;r de opprettes
+          </p>
+        </div>
       </div>
     );
   }

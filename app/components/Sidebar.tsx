@@ -125,7 +125,7 @@ function EmployeeTooltip({
         </div>
       )}
 
-      {daysLeft != null && (
+      {checkin.status === "checked_in" && (
         <div className="mb-2">
           <p
             className="text-[11px] font-medium"
@@ -133,12 +133,21 @@ function EmployeeTooltip({
           >
             Gjenstår
           </p>
-          <p
-            className="text-[12px] font-medium"
-            style={{ color: daysLeft <= 3 ? "#E5A940" : "var(--foreground)" }}
-          >
-            {daysLeft === 0 ? "Ferdig i dag" : `${daysLeft} arbeidsdager`}
-          </p>
+          {daysLeft != null ? (
+            <p
+              className="text-[12px] font-medium"
+              style={{ color: daysLeft <= 3 ? "#E5A940" : "var(--foreground)" }}
+            >
+              {daysLeft === 0 ? "Ferdig i dag" : `${daysLeft} arbeidsdager`}
+            </p>
+          ) : (
+            <p
+              className="text-[12px]"
+              style={{ color: "var(--muted-light)" }}
+            >
+              Ikke estimert
+            </p>
+          )}
         </div>
       )}
 
