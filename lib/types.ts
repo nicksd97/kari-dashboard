@@ -56,9 +56,10 @@ export interface Lead {
 export interface EmployeeScore {
   employee: string;
   checkinCount: number;
-  onTimeCount: number;
-  checklistCount: number;
-  perfectCount: number;
+  missedCheckins: number;
+  checklistOnTime: number;
+  checklistLate: number;
+  missedChecklists: number;
   total: number;
 }
 

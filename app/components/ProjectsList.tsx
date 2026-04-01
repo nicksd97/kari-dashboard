@@ -1,9 +1,17 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import type { Project } from "@/lib/types";
 import { STATUS_COLORS_SOFT, STATUS_LABELS, EMPLOYEE_COLORS } from "@/lib/types";
+import { supabase } from "@/lib/supabase";
+
+const COMPANY_ID = "a12dfbf0-a9d6-4786-95fe-6f1678d9d980";
+
+interface ChecklistWarning {
+  type: "open" | "overdue";
+  count: number;
+}
 
 interface ProjectsListProps {
   projects: Project[];
@@ -26,6 +34,42 @@ function formatDate(d: string): string {
 export default function ProjectsList({ projects }: ProjectsListProps) {
   const [statusFilter, setStatusFilter] = useState("alle");
   const [search, setSearch] = useState("");
+  const [warnings, setWarnings] = useState<Record<string, ChecklistWarning>>({});
+
+  // Fetch checklist warnings for all projects
+  useEffect(() => {
+    async function loadWarnings() {
+      const { data } = await supabase
+        .from("checklists")
+        .select("project_number, completed_at, created_at")
+        .eq("company_id", COMPANY_ID);
+      if (!data) return;
+
+      const now = Date.now();
+      const byProject: Record<string, ChecklistWarning> = {};
+      for (const cl of data) {
+        const pn = String(cl.project_number || "");
+        if (!pn) continue;
+        const completed = !!cl.completed_at;
+        const createdAt = cl.created_at ? new Date(String(cl.created_at)).getTime() : 0;
+        const daysSinceCreated = createdAt ? Math.round((now - createdAt) / (1000 * 60 * 60 * 24)) : 0;
+
+        if (!completed) {
+          const existing = byProject[pn];
+          if (daysSinceCreated > 3) {
+            // Overdue takes priority
+            byProject[pn] = { type: "overdue", count: (existing?.count || 0) + 1 };
+          } else if (!existing || existing.type !== "overdue") {
+            byProject[pn] = { type: "open", count: (existing?.count || 0) + 1 };
+          } else {
+            byProject[pn] = { ...existing, count: existing.count + 1 };
+          }
+        }
+      }
+      setWarnings(byProject);
+    }
+    loadWarnings();
+  }, [projects]);
 
   const sorted = useMemo(
     () => [...projects].sort((a, b) => Number(b.project_number) - Number(a.project_number)),
@@ -146,15 +190,26 @@ export default function ProjectsList({ projects }: ProjectsListProps) {
 
               {/* Name + customer (stacks on mobile) */}
               <div className="flex-1 min-w-0">
-                <p
-                  className="text-[13px] font-medium truncate"
-                  style={{
-                    color: p.status === "ferdig" ? "var(--muted-light)" : "var(--foreground)",
-                    textDecoration: p.status === "ferdig" ? "line-through" : "none",
-                  }}
-                >
-                  {p.name}
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <p
+                    className="text-[13px] font-medium truncate"
+                    style={{
+                      color: p.status === "ferdig" ? "var(--muted-light)" : "var(--foreground)",
+                      textDecoration: p.status === "ferdig" ? "line-through" : "none",
+                    }}
+                  >
+                    {p.name}
+                  </p>
+                  {warnings[p.project_number] && (
+                    <span
+                      className="shrink-0"
+                      title={warnings[p.project_number].type === "overdue" ? "Forfalt sjekkliste" : "Åpen sjekkliste"}
+                      style={{ fontSize: 14, lineHeight: 1, cursor: "help" }}
+                    >
+                      {warnings[p.project_number].type === "overdue" ? "\uD83D\uDD34" : "\uD83D\uDFE1"}
+                    </span>
+                  )}
+                </div>
                 {/* Mobile: show status inline. Desktop: hidden (shown in separate column) */}
                 <div className="flex items-center gap-2 sm:hidden mt-0.5">
                   <span

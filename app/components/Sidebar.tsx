@@ -577,8 +577,8 @@ function Leaderboard({ scores }: { scores: EmployeeScore[] }) {
                 {isFirst && (
                   <div className="mt-1.5 flex gap-2 text-[10px]" style={{ color: "var(--muted-light)" }}>
                     <span>{s.checkinCount} innsjekk.</span>
-                    {s.onTimeCount > 0 && <span>&middot; {s.onTimeCount} tidlig</span>}
-                    {s.checklistCount > 0 && <span>&middot; {s.checklistCount} sjekklister</span>}
+                    {s.missedCheckins > 0 && <span>&middot; {s.missedCheckins} mangler</span>}
+                    {s.checklistOnTime > 0 && <span>&middot; {s.checklistOnTime} sjekklister</span>}
                   </div>
                 )}
               </div>

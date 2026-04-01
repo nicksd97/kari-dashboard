@@ -149,7 +149,7 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
   const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [scrolledToToday, setScrolledToToday] = useState(false);
 
-  const safeProjects = projects || [];
+  const safeProjects = (projects || []).filter((p) => p.status !== "ferdig");
   const datedProjects = safeProjects.filter((p) => p.start_date && p.estimated_end_date);
   const today = new Date().toISOString().split("T")[0];
 

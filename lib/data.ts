@@ -346,9 +346,9 @@ export async function fetchLiveChecklistEntries(): Promise<ChecklistEntry[]> {
 }
 
 const DEMO_SCORES: EmployeeScore[] = [
-  { employee: "Marci", checkinCount: 7, onTimeCount: 5, checklistCount: 1, perfectCount: 1, total: 135 },
-  { employee: "Andrii", checkinCount: 6, onTimeCount: 4, checklistCount: 0, perfectCount: 0, total: 80 },
-  { employee: "Roar", checkinCount: 3, onTimeCount: 2, checklistCount: 0, perfectCount: 0, total: 40 },
+  { employee: "Marci", checkinCount: 7, missedCheckins: 0, checklistOnTime: 1, checklistLate: 0, missedChecklists: 0, total: 45 },
+  { employee: "Andrii", checkinCount: 6, missedCheckins: 1, checklistOnTime: 0, checklistLate: 0, missedChecklists: 0, total: 27 },
+  { employee: "Roar", checkinCount: 3, missedCheckins: 4, checklistOnTime: 0, checklistLate: 0, missedChecklists: 0, total: 3 },
 ];
 
 export function getDemoScores(): EmployeeScore[] {
@@ -360,10 +360,10 @@ export async function fetchLiveScores(): Promise<EmployeeScore[]> {
     const now = new Date();
     const y = now.getFullYear();
     const m = String(now.getMonth() + 1).padStart(2, "0");
-    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
     const monthStart = `${y}-${m}-01`;
     const monthEnd = `${y}-${m}-${String(lastDay).padStart(2, "0")}`;
-    console.log("[fetchLiveScores] range:", monthStart, "to", monthEnd);
+    const todayStr = `${y}-${m}-${String(now.getDate()).padStart(2, "0")}`;
 
     const { data: employees, error: empErr } = await supabase
       .from("employees")
@@ -372,64 +372,93 @@ export async function fetchLiveScores(): Promise<EmployeeScore[]> {
       .eq("checkin_enabled", true)
       .eq("is_active", true);
 
-    if (empErr || !employees || employees.length === 0) {
-      console.log("[fetchLiveScores] no employees found, error:", empErr);
-      return [];
-    }
+    if (empErr || !employees || employees.length === 0) return [];
 
-    const { data: checkins, error: ciErr } = await supabase
+    // Fetch all checkins for the month (both responded and not)
+    const { data: checkins } = await supabase
       .from("checkins")
-      .select("employee_id, responded_at, status")
+      .select("employee_id, checkin_date, responded_at, status")
       .eq("company_id", COMPANY_ID)
       .gte("checkin_date", monthStart)
       .lte("checkin_date", monthEnd);
 
-    // Checklists query: use * to avoid column name mismatches
-    const { data: checklists, error: clErr } = await supabase
+    // Fetch checklists for the month
+    const { data: checklists } = await supabase
       .from("checklists")
       .select("*")
       .eq("company_id", COMPANY_ID)
-      .not("completed_at", "is", null)
-      .gte("completed_at", monthStart + "T00:00:00")
-      .lte("completed_at", monthEnd + "T23:59:59");
+      .gte("created_at", monthStart + "T00:00:00")
+      .lte("created_at", monthEnd + "T23:59:59");
 
     const ciRows = checkins || [];
     const clRows = (checklists || []) as Record<string, unknown>[];
 
-    console.log("[fetchLiveScores] checkins:", ciRows.length, "error:", ciErr);
-    console.log("[fetchLiveScores] checklists:", clRows.length, "error:", clErr);
+    // Count weekdays from month start up to and including today
+    const weekdaysInMonth = countWeekdays(monthStart, todayStr);
 
     const scores: EmployeeScore[] = employees.map((emp: Record<string, unknown>) => {
       const firstName = String(emp.name || "").split(" ")[0];
       const empId = String(emp.id);
 
-      const empCheckins = ciRows.filter((c) => String(c.employee_id) === empId && c.status === "responded");
-      const checkinCount = empCheckins.length;
+      // Check-ins: +5 per responded day
+      const respondedCheckins = ciRows.filter((c) => String(c.employee_id) === empId && c.status === "responded");
+      const checkinCount = respondedCheckins.length;
 
-      // On-time: responded before 09:00 Oslo (UTC+1 winter / UTC+2 summer)
-      // March 31 is CEST (UTC+2), so 09:00 Oslo = 07:00 UTC
-      const onTimeCount = empCheckins.filter((c) => {
-        if (!c.responded_at) return false;
-        return new Date(String(c.responded_at)).getUTCHours() < 7;
-      }).length;
+      // Missed check-ins: weekdays with no response = -3 each
+      const checkinDates = new Set(respondedCheckins.map((c) => String(c.checkin_date)));
+      const missedCheckins = Math.max(0, weekdaysInMonth - checkinDates.size);
 
-      const empChecklists = clRows.filter((c) => String(c.completed_by) === empId);
-      const checklistCount = empChecklists.length;
-      // Check for perfect score using whichever column names exist
-      const perfectCount = empChecklists.filter((c) => {
-        const done = c.done ?? c.items_done ?? c.checked;
-        const total = c.total ?? c.items_total ?? c.total_items;
-        return done != null && total != null && done === total;
-      }).length;
+      // Checklists assigned to this employee
+      const empChecklists = clRows.filter((c) => String(c.completed_by || c.assigned_to || c.employee_id) === empId);
+      let checklistOnTime = 0;
+      let checklistLate = 0;
+      let missedChecklists = 0;
 
-      const total = (checkinCount * 10) + (onTimeCount * 5) + (checklistCount * 20) + (perfectCount * 10);
-      return { employee: firstName, checkinCount, onTimeCount, checklistCount, perfectCount, total };
+      for (const cl of empChecklists) {
+        const completedAt = cl.completed_at ? String(cl.completed_at) : null;
+        const createdAt = cl.created_at ? String(cl.created_at) : null;
+
+        if (completedAt) {
+          // Completed — check if on time (within 3 days of creation)
+          if (createdAt) {
+            const daysDiff = Math.round((new Date(completedAt).getTime() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24));
+            if (daysDiff <= 3) {
+              checklistOnTime++;
+            } else {
+              checklistLate++;
+            }
+          } else {
+            checklistOnTime++;
+          }
+        } else if (createdAt) {
+          // Not completed — check if overdue (>3 days since creation)
+          const daysSinceCreated = Math.round((now.getTime() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24));
+          if (daysSinceCreated > 3) {
+            missedChecklists++;
+          }
+        }
+      }
+
+      const total = (checkinCount * 5) + (checklistOnTime * 10) + (checklistLate * 5) + (missedCheckins * -3) + (missedChecklists * -5);
+      return { employee: firstName, checkinCount, missedCheckins, checklistOnTime, checklistLate, missedChecklists, total };
     });
 
-    console.log("[fetchLiveScores] scores:", JSON.stringify(scores));
     return scores.sort((a, b) => b.total - a.total);
   } catch (e) {
     console.error("[fetchLiveScores] error:", e);
     return [];
   }
+}
+
+function countWeekdays(startStr: string, endStr: string): number {
+  const start = new Date(startStr);
+  const end = new Date(endStr);
+  let count = 0;
+  const cur = new Date(start);
+  while (cur <= end) {
+    const dow = cur.getDay();
+    if (dow !== 0 && dow !== 6) count++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return count;
 }
