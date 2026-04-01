@@ -459,6 +459,10 @@ function Leaderboard({ scores }: { scores: EmployeeScore[] }) {
   const capMonth = monthName.charAt(0).toUpperCase() + monthName.slice(1);
   const year = new Date().getFullYear();
   const [expandedEmployee, setExpandedEmployee] = useState<string | null>(null);
+  const [hasHover, setHasHover] = useState(false);
+  useEffect(() => {
+    setHasHover(window.matchMedia("(hover: hover)").matches);
+  }, []);
 
   if (sorted.length === 0) return null;
 
@@ -493,7 +497,9 @@ function Leaderboard({ scores }: { scores: EmployeeScore[] }) {
                   border: isFirst ? "1px solid #E5A940" : "1px solid var(--card-border)",
                   backgroundColor: isFirst ? "rgba(229, 169, 64, 0.04)" : "var(--card-bg)",
                 }}
-                onClick={() => setExpandedEmployee(isExpanded ? null : s.employee)}
+                onClick={hasHover ? undefined : () => setExpandedEmployee(isExpanded ? null : s.employee)}
+                onMouseEnter={hasHover ? () => setExpandedEmployee(s.employee) : undefined}
+                onMouseLeave={hasHover ? () => setExpandedEmployee(null) : undefined}
               >
                 {/* Confetti dots for #1 */}
                 {isFirst && (
