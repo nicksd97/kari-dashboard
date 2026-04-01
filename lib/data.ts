@@ -181,9 +181,29 @@ export async function fetchLiveProjects(): Promise<Project[]> {
 
     if (error || !data) return [];
 
-    console.log("[fetchLiveProjects] raw data:", JSON.stringify(data.map((p: Record<string, unknown>) => ({
-      project_number: p.project_number, start_date: p.start_date, estimated_end_date: p.estimated_end_date, assigned_to: p.assigned_to, employees: p.employees,
-    }))));
+    // Fetch all checkins to extend bar dates based on actual work
+    const { data: allCheckins } = await supabase
+      .from("checkins")
+      .select("checkin_date, project_assignment")
+      .eq("company_id", COMPANY_ID)
+      .eq("status", "responded");
+
+    // Build a map: project_number → { minDate, maxDate } from checkins
+    const checkinDates = new Map<string, { min: string; max: string }>();
+    for (const ci of (allCheckins || [])) {
+      const pa = String(ci.project_assignment || "");
+      // project_assignment can be "732" or "732 - Name" or "732 Name"
+      const pn = pa.split(/[\s-]/)[0];
+      if (!pn) continue;
+      const d = String(ci.checkin_date);
+      const existing = checkinDates.get(pn);
+      if (existing) {
+        if (d < existing.min) existing.min = d;
+        if (d > existing.max) existing.max = d;
+      } else {
+        checkinDates.set(pn, { min: d, max: d });
+      }
+    }
 
     return await Promise.all(
       data.map(async (p: Record<string, unknown>) => {
@@ -192,18 +212,31 @@ export async function fetchLiveProjects(): Promise<Project[]> {
           .select("*")
           .eq("project_id", p.id);
 
-        // Resolve employee name from FK join
         const empData = p.employees as { name: string } | null;
         const assignedName = empData?.name?.split(" ")[0] || undefined;
+        const pn = String(p.project_number || "");
+
+        // Extend dates using checkin history
+        let startDate = p.start_date ? String(p.start_date) : undefined;
+        let endDate = p.estimated_end_date ? String(p.estimated_end_date) : undefined;
+        const ciDates = checkinDates.get(pn);
+
+        if (ciDates) {
+          if (!startDate || ciDates.min < startDate) startDate = ciDates.min;
+          if (!endDate || ciDates.max > endDate) endDate = ciDates.max;
+        }
+
+        // Default end to start if still missing
+        if (!endDate && startDate) endDate = startDate;
 
         return {
-          project_number: String(p.project_number || ""),
+          project_number: pn,
           name: String(p.name || ""),
           status: String(p.status || ""),
           customer_name: p.customer_name ? String(p.customer_name) : undefined,
-          start_date: p.start_date ? String(p.start_date) : undefined,
-          estimated_end_date: p.estimated_end_date ? String(p.estimated_end_date) : (p.start_date ? String(p.start_date) : undefined),
-          end_date_defaulted: !p.estimated_end_date && !!p.start_date,
+          start_date: startDate,
+          estimated_end_date: endDate,
+          end_date_defaulted: !p.estimated_end_date && !ciDates && !!p.start_date,
           agreed_price: p.agreed_price ? Number(p.agreed_price) : undefined,
           assigned: assignedName,
           dependency: p.dependency ? String(p.dependency) : undefined,

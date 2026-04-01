@@ -557,7 +557,10 @@ function Leaderboard({ scores }: { scores: EmployeeScore[] }) {
                 <p className="text-center" style={{ marginTop: 1 }}>
                   <span
                     className="font-bold"
-                    style={{ fontSize: isFirst ? 16 : 13, color: isFirst ? "#E5A940" : "var(--muted)" }}
+                    style={{
+                      fontSize: isFirst ? 16 : 13,
+                      color: s.total < 0 ? "#E53935" : s.total === 0 ? "var(--muted-light)" : isFirst ? "#E5A940" : "var(--muted)",
+                    }}
                   >
                     {s.total}
                   </span>{" "}
