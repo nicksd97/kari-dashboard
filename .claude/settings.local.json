@@ -22,7 +22,8 @@
       "Bash(mkdir -p app/api/graph/folders/[itemId]/files)",
       "Bash(mkdir -p app/api/graph/files/[itemId]/content)",
       "Bash(grep -n \"inline\" app/api/graph/files/[itemId]/content/route.ts)",
-      "Bash(grep -n \"inline=true\" app/project/[number]/page.tsx)"
+      "Bash(grep -n \"inline=true\" app/project/[number]/page.tsx)",
+      "Bash(wc:*)"
     ]
   }
 }

@@ -379,9 +379,9 @@ export async function fetchLiveChecklistEntries(): Promise<ChecklistEntry[]> {
 }
 
 const DEMO_SCORES: EmployeeScore[] = [
-  { employee: "Marci", checkinCount: 7, missedCheckins: 0, checklistOnTime: 1, checklistLate: 0, missedChecklists: 0, total: 45 },
-  { employee: "Andrii", checkinCount: 6, missedCheckins: 1, checklistOnTime: 0, checklistLate: 0, missedChecklists: 0, total: 27 },
-  { employee: "Roar", checkinCount: 3, missedCheckins: 4, checklistOnTime: 0, checklistLate: 0, missedChecklists: 0, total: 3 },
+  { employee: "Marci", checkinCount: 7, missedCheckins: 0, checklistOnTime: 1, checklistLate: 0, missedChecklists: 0, deviationsReported: 1, deviationsResponsible: 0, deviationsResolved: 1, deviationReporterPts: 5, deviationResponsiblePts: 0, deviationResolutionPts: 5, total: 55 },
+  { employee: "Andrii", checkinCount: 6, missedCheckins: 1, checklistOnTime: 0, checklistLate: 0, missedChecklists: 0, deviationsReported: 0, deviationsResponsible: 1, deviationsResolved: 0, deviationReporterPts: 0, deviationResponsiblePts: -10, deviationResolutionPts: 0, total: 17 },
+  { employee: "Roar", checkinCount: 3, missedCheckins: 4, checklistOnTime: 0, checklistLate: 0, missedChecklists: 0, deviationsReported: 0, deviationsResponsible: 0, deviationsResolved: 0, deviationReporterPts: 0, deviationResponsiblePts: 0, deviationResolutionPts: 0, total: 3 },
 ];
 
 export function getDemoScores(): EmployeeScore[] {
@@ -423,8 +423,17 @@ export async function fetchLiveScores(): Promise<EmployeeScore[]> {
       .gte("created_at", monthStart + "T00:00:00")
       .lte("created_at", monthEnd + "T23:59:59");
 
+    // Fetch deviations for the month
+    const { data: deviations } = await supabase
+      .from("deviations")
+      .select("reported_by, responsible_id, resolved_by, reporter_points, responsible_points, resolution_points, created_at")
+      .eq("company_id", COMPANY_ID)
+      .gte("created_at", monthStart + "T00:00:00")
+      .lte("created_at", monthEnd + "T23:59:59");
+
     const ciRows = checkins || [];
     const clRows = (checklists || []) as Record<string, unknown>[];
+    const devRows = (deviations || []) as Record<string, unknown>[];
 
     // Count weekdays from month start up to and including today
     const weekdaysInMonth = countWeekdays(monthStart, todayStr);
@@ -472,8 +481,21 @@ export async function fetchLiveScores(): Promise<EmployeeScore[]> {
         }
       }
 
-      const total = (checkinCount * 5) + (checklistOnTime * 10) + (checklistLate * 5) + (missedCheckins * -3) + (missedChecklists * -5);
-      return { employee: firstName, checkinCount, missedCheckins, checklistOnTime, checklistLate, missedChecklists, total };
+      // Deviations
+      const reported = devRows.filter((d) => String(d.reported_by) === empId);
+      const responsible = devRows.filter((d) => String(d.responsible_id) === empId);
+      const resolved = devRows.filter((d) => String(d.resolved_by) === empId);
+
+      const deviationReporterPts = reported.reduce((sum, d) => sum + (Number(d.reporter_points) || 0), 0);
+      const deviationResponsiblePts = responsible.reduce((sum, d) => sum + (Number(d.responsible_points) || 0), 0);
+      const deviationResolutionPts = resolved.reduce((sum, d) => sum + (Number(d.resolution_points) || 0), 0);
+
+      const total = (checkinCount * 5) + (checklistOnTime * 10) + (checklistLate * 5) + (missedCheckins * -3) + (missedChecklists * -5) + deviationReporterPts + deviationResponsiblePts + deviationResolutionPts;
+      return {
+        employee: firstName, checkinCount, missedCheckins, checklistOnTime, checklistLate, missedChecklists,
+        deviationsReported: reported.length, deviationsResponsible: responsible.length, deviationsResolved: resolved.length,
+        deviationReporterPts, deviationResponsiblePts, deviationResolutionPts, total,
+      };
     });
 
     return scores.sort((a, b) => b.total - a.total);

@@ -36,6 +36,19 @@ interface DriveFolder {
 
 type DriveItem = DriveFile | DriveFolder;
 
+interface DeviationRow {
+  id: string;
+  description: string;
+  severity: string;
+  status: string;
+  reported_by_name: string;
+  responsible_name: string;
+  resolution_deadline: string | null;
+  resolution_description: string | null;
+  resolved_at: string | null;
+  created_at: string;
+}
+
 interface ChecklistRow {
   id: string;
   template_name: string;
@@ -85,6 +98,7 @@ export default function ProjectPage({ params }: { params: Promise<{ number: stri
   const [subfolders, setSubfolders] = useState<Subfolder[]>([]);
   const [projectFolder, setProjectFolder] = useState<string>("");
   const [checklists, setChecklists] = useState<ChecklistRow[]>([]);
+  const [deviations, setDeviations] = useState<DeviationRow[]>([]);
   const [activeTab, setActiveTab] = useState<string>("");
   const [loadingProject, setLoadingProject] = useState(true);
   const [loadingFolders, setLoadingFolders] = useState(true);
@@ -160,9 +174,37 @@ export default function ProjectPage({ params }: { params: Promise<{ number: stri
     load();
   }, [projectNumber]);
 
+  // Fetch deviations from Supabase
+  useEffect(() => {
+    async function load() {
+      const { data } = await supabase
+        .from("deviations")
+        .select("*, reporter:reported_by(name), responsible:responsible_id(name)")
+        .eq("company_id", COMPANY_ID)
+        .eq("project_number", projectNumber)
+        .order("created_at", { ascending: false });
+      if (data) {
+        setDeviations(data.map((d: Record<string, unknown>) => ({
+          id: String(d.id),
+          description: String(d.description || ""),
+          severity: String(d.severity || "medium"),
+          status: String(d.status || "open"),
+          reported_by_name: (d.reporter as { name: string } | null)?.name?.split(" ")[0] || "",
+          responsible_name: (d.responsible as { name: string } | null)?.name?.split(" ")[0] || "",
+          resolution_deadline: d.resolution_deadline ? String(d.resolution_deadline) : null,
+          resolution_description: d.resolution_description ? String(d.resolution_description) : null,
+          resolved_at: d.resolved_at ? String(d.resolved_at) : null,
+          created_at: String(d.created_at || ""),
+        })));
+      }
+    }
+    load();
+  }, [projectNumber]);
+
   // Get the tab name for the active tab
   const activeTabName = subfolders.find((sf) => sf.id === activeTab)?.name || "";
   const hasChecklists = checklists.length > 0;
+  const hasDeviations = deviations.length > 0;
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "var(--background)" }}>
@@ -228,11 +270,19 @@ export default function ProjectPage({ params }: { params: Promise<{ number: stri
                   Sjekklister ({checklists.length})
                 </button>
               )}
+              {hasDeviations && (
+                <button onClick={() => setActiveTab("deviations")} className="shrink-0 rounded-lg px-4 font-medium transition-colors cursor-pointer"
+                  style={{ height: 44, fontSize: 13, backgroundColor: activeTab === "deviations" ? "var(--foreground)" : "var(--surface)", color: activeTab === "deviations" ? "var(--background)" : "var(--muted)", border: activeTab === "deviations" ? "none" : "1px solid var(--card-border)" }}>
+                  Avvik ({deviations.length})
+                </button>
+              )}
             </div>
 
             {/* Tab content */}
             {activeTab === "checklists" ? (
               <ChecklistsView checklists={checklists} />
+            ) : activeTab === "deviations" ? (
+              <DeviationsView deviations={deviations} />
             ) : activeTab ? (
               <FolderBrowser
                 key={activeTab}
@@ -569,6 +619,104 @@ function ChecklistsView({ checklists }: { checklists: ChecklistRow[] }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// --- Deviations View ---
+
+const SEVERITY_COLORS: Record<string, { bg: string; text: string }> = {
+  low: { bg: "#dbeafe", text: "#1e40af" },
+  medium: { bg: "#fef3c7", text: "#92400e" },
+  high: { bg: "#fee2e2", text: "#991b1b" },
+  critical: { bg: "#fecaca", text: "#7f1d1d" },
+};
+
+const SEVERITY_LABELS: Record<string, string> = {
+  low: "Lav",
+  medium: "Middels",
+  high: "Høy",
+  critical: "Kritisk",
+};
+
+function DeviationsView({ deviations }: { deviations: DeviationRow[] }) {
+  if (deviations.length === 0) {
+    return (
+      <div className="rounded-xl p-8 text-center" style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}>
+        <p className="text-[14px] font-medium" style={{ color: "var(--muted-light)" }}>Ingen avvik for dette prosjektet</p>
+      </div>
+    );
+  }
+
+  const open = deviations.filter((d) => d.status === "open");
+  const resolved = deviations.filter((d) => d.status !== "open");
+
+  return (
+    <div className="space-y-2">
+      {open.length > 0 && (
+        <p className="text-[10px] font-semibold uppercase mb-1" style={{ color: "var(--muted-light)", letterSpacing: "0.04em" }}>
+          &Aring;pne ({open.length})
+        </p>
+      )}
+      {open.map((d) => <DeviationCard key={d.id} deviation={d} />)}
+
+      {resolved.length > 0 && (
+        <p className="text-[10px] font-semibold uppercase mb-1 mt-4" style={{ color: "var(--muted-light)", letterSpacing: "0.04em" }}>
+          L&oslash;st ({resolved.length})
+        </p>
+      )}
+      {resolved.map((d) => <DeviationCard key={d.id} deviation={d} />)}
+    </div>
+  );
+}
+
+function DeviationCard({ deviation: d }: { deviation: DeviationRow }) {
+  const isOpen = d.status === "open";
+  const sev = SEVERITY_COLORS[d.severity] || SEVERITY_COLORS.medium;
+  const sevLabel = SEVERITY_LABELS[d.severity] || d.severity;
+
+  // Deadline countdown
+  let deadlineText = "";
+  if (isOpen && d.resolution_deadline) {
+    const daysLeft = Math.round((new Date(d.resolution_deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    if (daysLeft < 0) deadlineText = `${Math.abs(daysLeft)} dager over frist`;
+    else if (daysLeft === 0) deadlineText = "Frist i dag";
+    else deadlineText = `${daysLeft} dager igjen`;
+  }
+
+  return (
+    <div className="rounded-xl overflow-hidden" style={{ backgroundColor: "var(--card-bg)", border: `1px solid ${isOpen ? "#fca5a5" : "var(--card-border)"}` }}>
+      <div className="px-4 py-3">
+        <div className="flex items-start gap-2 mb-2">
+          <span className="mt-0.5 shrink-0" style={{ fontSize: 14 }}>{isOpen ? "\uD83D\uDD34" : "\uD83D\uDFE2"}</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-[13px] font-medium" style={{ color: "var(--foreground)" }}>{d.description}</p>
+          </div>
+          <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: sev.bg, color: sev.text }}>
+            {sevLabel}
+          </span>
+        </div>
+
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px]" style={{ color: "var(--muted)" }}>
+          {d.reported_by_name && <span>Rapportert av: <span style={{ color: "var(--foreground)" }}>{d.reported_by_name}</span></span>}
+          {d.responsible_name && <span>Ansvarlig: <span style={{ color: "var(--foreground)" }}>{d.responsible_name}</span></span>}
+          <span>{formatDate(d.created_at)}</span>
+        </div>
+
+        {isOpen && deadlineText && (
+          <p className="mt-1.5 text-[11px] font-medium" style={{ color: deadlineText.includes("over") ? "#E53935" : "#E5A940" }}>
+            Frist: {deadlineText}
+          </p>
+        )}
+
+        {!isOpen && d.resolution_description && (
+          <div className="mt-2 rounded-lg px-3 py-2" style={{ backgroundColor: "var(--surface)" }}>
+            <p className="text-[10px] font-medium mb-0.5" style={{ color: "var(--muted-light)" }}>Løsning</p>
+            <p className="text-[12px]" style={{ color: "var(--foreground)" }}>{d.resolution_description}</p>
+            {d.resolved_at && <p className="mt-0.5 text-[10px]" style={{ color: "var(--muted-light)" }}>Løst {formatDate(d.resolved_at)}</p>}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

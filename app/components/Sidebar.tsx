@@ -561,7 +561,7 @@ function Leaderboard({ scores }: { scores: EmployeeScore[] }) {
 // --- Score breakdown panel ---
 
 function ScoreBreakdown({ score: s, monthLabel }: { score: EmployeeScore; monthLabel: string }) {
-  const hasActivity = s.checkinCount > 0 || s.missedCheckins > 0 || s.checklistOnTime > 0 || s.checklistLate > 0 || s.missedChecklists > 0;
+  const hasActivity = s.checkinCount > 0 || s.missedCheckins > 0 || s.checklistOnTime > 0 || s.checklistLate > 0 || s.missedChecklists > 0 || s.deviationsReported > 0 || s.deviationsResponsible > 0 || s.deviationsResolved > 0;
 
   if (!hasActivity) {
     return (
@@ -587,6 +587,15 @@ function ScoreBreakdown({ score: s, monthLabel }: { score: EmployeeScore; monthL
   }
   if (s.missedChecklists > 0) {
     lines.push({ emoji: "\u274C", label: `Forfalt sjekkliste (${s.missedChecklists})`, pts: s.missedChecklists * -5 });
+  }
+  if (s.deviationsReported > 0) {
+    lines.push({ emoji: "\u26A0\uFE0F", label: `Avvik rapportert (${s.deviationsReported})`, pts: s.deviationReporterPts });
+  }
+  if (s.deviationsResponsible > 0) {
+    lines.push({ emoji: "\u274C", label: `Avvik ansvarlig (${s.deviationsResponsible})`, pts: s.deviationResponsiblePts });
+  }
+  if (s.deviationsResolved > 0) {
+    lines.push({ emoji: "\u2705", label: `Avvik l\u00f8st i tide (${s.deviationsResolved})`, pts: s.deviationResolutionPts });
   }
 
   return (

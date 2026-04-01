@@ -60,6 +60,12 @@ export interface EmployeeScore {
   checklistOnTime: number;
   checklistLate: number;
   missedChecklists: number;
+  deviationsReported: number;
+  deviationsResponsible: number;
+  deviationsResolved: number;
+  deviationReporterPts: number;
+  deviationResponsiblePts: number;
+  deviationResolutionPts: number;
   total: number;
 }
 
