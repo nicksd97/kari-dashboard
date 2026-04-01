@@ -15,6 +15,7 @@ interface LeadPipelineProps {
 const COLUMNS = [
   "new",
   "contacted",
+  "befaring",
   "followup_pending",
   "qualified",
   "converted",

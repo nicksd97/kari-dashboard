@@ -111,6 +111,7 @@ export const SOURCE_COLORS: Record<string, string> = {
 export const LEAD_STATUS_LABELS: Record<string, string> = {
   new: "Ny",
   contacted: "Kontaktet",
+  befaring: "Befaring",
   followup_pending: "Oppfølging",
   qualified: "Kvalifisert",
   converted: "Konvertert",
@@ -120,6 +121,7 @@ export const LEAD_STATUS_LABELS: Record<string, string> = {
 export const LEAD_STATUS_COLORS: Record<string, string> = {
   new: "#B5D4F4",
   contacted: "#CECBF6",
+  befaring: "#F5A623",
   followup_pending: "#FAC775",
   qualified: "#9FE1CB",
   converted: "#C0DD97",
