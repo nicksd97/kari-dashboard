@@ -458,10 +458,9 @@ function Leaderboard({ scores }: { scores: EmployeeScore[] }) {
   const monthName = new Date().toLocaleDateString("nb-NO", { month: "long" });
   const capMonth = monthName.charAt(0).toUpperCase() + monthName.slice(1);
   const year = new Date().getFullYear();
+  const [expandedEmployee, setExpandedEmployee] = useState<string | null>(null);
 
   if (sorted.length === 0) return null;
-
-  const maxScore = sorted[0].total;
 
   return (
     <>
@@ -483,16 +482,18 @@ function Leaderboard({ scores }: { scores: EmployeeScore[] }) {
           {sorted.map((s, i) => {
             const isFirst = i === 0 && s.total > 0;
             const color = EMPLOYEE_COLORS[s.employee] || "#999";
+            const isExpanded = expandedEmployee === s.employee;
 
             return (
               <div
                 key={s.employee}
-                className="relative flex flex-col items-center rounded-lg transition-all"
+                className="relative flex flex-col items-center rounded-lg transition-all cursor-pointer"
                 style={{
                   padding: isFirst ? "16px 14px 14px" : "12px 14px 10px",
                   border: isFirst ? "1px solid #E5A940" : "1px solid var(--card-border)",
                   backgroundColor: isFirst ? "rgba(229, 169, 64, 0.04)" : "var(--card-bg)",
                 }}
+                onClick={() => setExpandedEmployee(isExpanded ? null : s.employee)}
               >
                 {/* Confetti dots for #1 */}
                 {isFirst && (
@@ -508,87 +509,102 @@ function Leaderboard({ scores }: { scores: EmployeeScore[] }) {
 
                 {/* Crown/star above avatar for #1 */}
                 {isFirst && (
-                  <div className="text-[14px] mb-0.5" style={{ lineHeight: 1 }}>
-                    &#x1F451;
-                  </div>
+                  <div className="text-[14px] mb-0.5" style={{ lineHeight: 1 }}>&#x1F451;</div>
                 )}
 
                 {/* Avatar with rank badge for #2/#3 */}
                 <div className="relative">
                   <div
                     className="flex items-center justify-center rounded-full font-bold text-white"
-                    style={{
-                      width: isFirst ? 48 : 36,
-                      height: isFirst ? 48 : 36,
-                      fontSize: isFirst ? 18 : 14,
-                      backgroundColor: color,
-                      border: isFirst ? "3px solid #E5A940" : "none",
-                    }}
+                    style={{ width: isFirst ? 48 : 36, height: isFirst ? 48 : 36, fontSize: isFirst ? 18 : 14, backgroundColor: color, border: isFirst ? "3px solid #E5A940" : "none" }}
                   >
                     {s.employee[0]}
                   </div>
                   {!isFirst && (
-                    <div
-                      className="absolute flex items-center justify-center rounded-full text-[9px] font-bold"
-                      style={{
-                        width: 16,
-                        height: 16,
-                        top: -4,
-                        right: -4,
-                        backgroundColor: "var(--card-bg)",
-                        border: "1px solid var(--card-border)",
-                        color: "var(--muted)",
-                      }}
-                    >
+                    <div className="absolute flex items-center justify-center rounded-full text-[9px] font-bold" style={{ width: 16, height: 16, top: -4, right: -4, backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)", color: "var(--muted)" }}>
                       {i + 1}
                     </div>
                   )}
                 </div>
 
                 {/* Name */}
-                <p
-                  className="mt-1.5 text-center font-semibold"
-                  style={{ fontSize: isFirst ? 14 : 13, color: "var(--foreground)" }}
-                >
-                  {s.employee}
-                </p>
+                <p className="mt-1.5 text-center font-semibold" style={{ fontSize: isFirst ? 14 : 13, color: "var(--foreground)" }}>{s.employee}</p>
 
                 {/* Score */}
                 <p className="text-center" style={{ marginTop: 1 }}>
-                  <span
-                    className="font-bold"
-                    style={{
-                      fontSize: isFirst ? 16 : 13,
-                      color: s.total < 0 ? "#E53935" : s.total === 0 ? "var(--muted-light)" : isFirst ? "#E5A940" : "var(--muted)",
-                    }}
-                  >
+                  <span className="font-bold" style={{ fontSize: isFirst ? 16 : 13, color: s.total < 0 ? "#E53935" : s.total === 0 ? "var(--muted-light)" : isFirst ? "#E5A940" : "var(--muted)" }}>
                     {s.total}
                   </span>{" "}
-                  <span className="text-[10px]" style={{ color: "var(--muted-light)" }}>
-                    poeng
-                  </span>
+                  <span className="text-[10px]" style={{ color: "var(--muted-light)" }}>poeng</span>
                 </p>
 
                 {/* Leader label for #1 */}
-                {isFirst && (
-                  <p className="mt-0.5 text-[10px] font-semibold" style={{ color: "#CF952F" }}>
-                    M&aring;nedens leder
-                  </p>
-                )}
+                {isFirst && <p className="mt-0.5 text-[10px] font-semibold" style={{ color: "#CF952F" }}>M&aring;nedens leder</p>}
 
-                {/* Stats breakdown for #1 */}
-                {isFirst && (
-                  <div className="mt-1.5 flex gap-2 text-[10px]" style={{ color: "var(--muted-light)" }}>
-                    <span>{s.checkinCount} innsjekk.</span>
-                    {s.missedCheckins > 0 && <span>&middot; {s.missedCheckins} mangler</span>}
-                    {s.checklistOnTime > 0 && <span>&middot; {s.checklistOnTime} sjekklister</span>}
-                  </div>
-                )}
+                {/* Expanded breakdown */}
+                {isExpanded && <ScoreBreakdown score={s} monthLabel={`${capMonth} ${year}`} />}
               </div>
             );
           })}
         </div>
       </div>
     </>
+  );
+}
+
+// --- Score breakdown panel ---
+
+function ScoreBreakdown({ score: s, monthLabel }: { score: EmployeeScore; monthLabel: string }) {
+  const hasActivity = s.checkinCount > 0 || s.missedCheckins > 0 || s.checklistOnTime > 0 || s.checklistLate > 0 || s.missedChecklists > 0;
+
+  if (!hasActivity) {
+    return (
+      <div className="mt-3 w-full text-center text-[11px]" style={{ color: "var(--muted-light)" }}>
+        Ingen aktivitet denne m&aring;neden
+      </div>
+    );
+  }
+
+  const lines: { emoji: string; label: string; pts: number }[] = [];
+
+  if (s.checkinCount > 0) {
+    lines.push({ emoji: "\u2705", label: `Sjekk-inn (${s.checkinCount} ${s.checkinCount === 1 ? "dag" : "dager"})`, pts: s.checkinCount * 5 });
+  }
+  if (s.missedCheckins > 0) {
+    lines.push({ emoji: "\u274C", label: `Manglende sjekk-inn (${s.missedCheckins} ${s.missedCheckins === 1 ? "dag" : "dager"})`, pts: s.missedCheckins * -3 });
+  }
+  if (s.checklistOnTime > 0) {
+    lines.push({ emoji: "\u2705", label: `Sjekkliste levert i tide (${s.checklistOnTime})`, pts: s.checklistOnTime * 10 });
+  }
+  if (s.checklistLate > 0) {
+    lines.push({ emoji: "\u26A0\uFE0F", label: `Sjekkliste levert sent (${s.checklistLate})`, pts: s.checklistLate * 5 });
+  }
+  if (s.missedChecklists > 0) {
+    lines.push({ emoji: "\u274C", label: `Forfalt sjekkliste (${s.missedChecklists})`, pts: s.missedChecklists * -5 });
+  }
+
+  return (
+    <div className="mt-3 w-full rounded-lg" style={{ backgroundColor: "var(--surface)", border: "1px solid var(--divider)", padding: "10px 12px" }}>
+      <p className="text-[10px] font-semibold uppercase mb-2" style={{ color: "var(--muted-light)", letterSpacing: "0.03em" }}>
+        {monthLabel}
+      </p>
+      <div className="space-y-1.5">
+        {lines.map((line, idx) => (
+          <div key={idx} className="flex items-center gap-2 text-[11px]">
+            <span style={{ fontSize: 12 }}>{line.emoji}</span>
+            <span className="flex-1" style={{ color: "var(--foreground)" }}>{line.label}</span>
+            <span className="font-semibold" style={{ color: line.pts >= 0 ? "#22c55e" : "#E53935" }}>
+              {line.pts >= 0 ? "+" : ""}{line.pts}
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 pt-2 flex items-center justify-between text-[12px] font-bold" style={{ borderTop: "1px solid var(--divider)" }}>
+        <span style={{ color: "var(--foreground)" }}>Total</span>
+        <span style={{ color: s.total < 0 ? "#E53935" : s.total === 0 ? "var(--muted-light)" : "#22c55e" }}>
+          {s.total >= 0 ? "+" : ""}{s.total}
+        </span>
+      </div>
+    </div>
   );
 }
