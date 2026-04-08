@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
-import { DM_Sans } from "next/font/google";
+import { DM_Sans, Geist } from "next/font/google";
 import "./globals.css";
+import { cn } from "@/lib/utils";
+
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 const dmSans = DM_Sans({
   subsets: ["latin"],
@@ -19,7 +22,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="no" className={`${dmSans.className} h-full antialiased`}>
+    <html lang="no" className={cn("h-full", "antialiased", dmSans.className, "font-sans", geist.variable)}>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );
