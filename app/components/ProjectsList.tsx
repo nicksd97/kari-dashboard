@@ -107,8 +107,7 @@ export default function ProjectsList({ projects }: ProjectsListProps) {
       {/* Header */}
       <div className="flex items-center gap-3 mb-4">
         <h2
-          className="text-[16px] font-bold"
-          style={{ color: "var(--foreground)" }}
+          className="text-[16px] font-bold text-foreground"
         >
           Prosjekter
         </h2>
@@ -161,17 +160,15 @@ export default function ProjectsList({ projects }: ProjectsListProps) {
       {/* List */}
       {filtered.length === 0 ? (
         <div
-          className="rounded-xl p-8 text-center"
-          style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}
+          className="rounded-xl p-8 text-center bg-card border border-border"
         >
-          <p className="text-[14px] font-medium" style={{ color: "var(--muted-light)" }}>
+          <p className="text-[14px] font-medium text-muted-foreground/70">
             Ingen prosjekter funnet
           </p>
         </div>
       ) : (
         <div
-          className="rounded-xl overflow-hidden"
-          style={{ backgroundColor: "var(--card-bg)", border: "1px solid var(--card-border)" }}
+          className="rounded-xl overflow-hidden bg-card border border-border"
         >
           {filtered.map((p, i) => (
             <Link
@@ -182,8 +179,7 @@ export default function ProjectsList({ projects }: ProjectsListProps) {
             >
               {/* Number */}
               <span
-                className="shrink-0 text-[12px] font-medium w-10"
-                style={{ color: "var(--muted-light)" }}
+                className="shrink-0 text-[12px] font-medium w-10 text-muted-foreground/70"
               >
                 #{p.project_number}
               </span>
@@ -219,7 +215,7 @@ export default function ProjectsList({ projects }: ProjectsListProps) {
                     {STATUS_LABELS[p.status] || p.status}
                   </span>
                   {p.assigned && (
-                    <span className="text-[11px] flex items-center gap-1" style={{ color: "var(--muted-light)" }}>
+                    <span className="text-[11px] flex items-center gap-1 text-muted-foreground/70">
                       <span className="rounded-full" style={{ width: 5, height: 5, backgroundColor: EMPLOYEE_COLORS[p.assigned] || "#888" }} />
                       {p.assigned}
                     </span>
@@ -230,18 +226,18 @@ export default function ProjectsList({ projects }: ProjectsListProps) {
               {/* Desktop columns */}
               <div className="hidden sm:flex items-center gap-3 shrink-0">
                 {p.customer_name && (
-                  <span className="text-[12px] w-28 truncate" style={{ color: "var(--muted-light)" }}>
+                  <span className="text-[12px] w-28 truncate text-muted-foreground/70">
                     {p.customer_name}
                   </span>
                 )}
                 {p.assigned && (
-                  <span className="flex items-center gap-1.5 text-[12px] w-16" style={{ color: "var(--muted)" }}>
+                  <span className="flex items-center gap-1.5 text-[12px] w-16 text-muted-foreground">
                     <span className="rounded-full" style={{ width: 6, height: 6, backgroundColor: EMPLOYEE_COLORS[p.assigned] || "#888" }} />
                     {p.assigned}
                   </span>
                 )}
                 {p.start_date && (
-                  <span className="text-[11px] w-16 text-right" style={{ color: "var(--muted-light)" }}>
+                  <span className="text-[11px] w-16 text-right text-muted-foreground/70">
                     {formatDate(p.start_date)}
                   </span>
                 )}
@@ -254,7 +250,7 @@ export default function ProjectsList({ projects }: ProjectsListProps) {
               </div>
 
               {/* Chevron */}
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0" style={{ color: "var(--muted-light)" }}>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0 text-muted-foreground/70">
                 <path d="M6 4L10 8L6 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </Link>

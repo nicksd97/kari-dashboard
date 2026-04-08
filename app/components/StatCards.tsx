@@ -50,7 +50,7 @@ export default function StatCards({ projects: rawProjects, leads: rawLeads }: St
             minHeight: 80,
           }}
         >
-          <p className="text-[13px] font-medium" style={{ color: "var(--muted)" }}>
+          <p className="text-[13px] font-medium text-muted-foreground">
             {card.label}
           </p>
           <p

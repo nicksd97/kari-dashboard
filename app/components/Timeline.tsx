@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import Link from "next/link";
+import { useGesture } from "@use-gesture/react";
 import type { Project, Checklist, Checkin } from "@/lib/types";
 import {
   STATUS_COLORS_SOFT,
@@ -16,13 +17,12 @@ interface TimelineProps {
 
 const EMPLOYEES = ["Roar", "Andrii", "Marci"];
 const LEFT_COL = 240;
-const ROW_HEIGHT = 36;
-const BAR_HEIGHT = 20;
-const EMP_HEADER = 32;
-const HEADER_HEIGHT = 52;
-const MONTH_ROW = 24;
+const ROW_HEIGHT = 44; // Increased to 44px for touch targets
+const BAR_HEIGHT = 28; // Increased bar height
+const EMP_HEADER = 36;
+const HEADER_HEIGHT = 56;
+const MONTH_ROW = 28;
 const DAY_ROW = 28;
-const DAY_W = 40;
 
 // --- Utilities ---
 
@@ -65,7 +65,7 @@ function getBarStyle(p: Project, today: string): BarStyle {
     p.status === "planlegging" ||
     (p.start_date && p.start_date > today)
   ) {
-    return { bg: "#ffffff", border: "1px dashed #C0C0C0" };
+    return { bg: "var(--card)", border: "1px dashed #C0C0C0" };
   }
   const overdue = p.estimated_end_date && p.estimated_end_date < today && p.status !== "ferdig";
   if (overdue) {
@@ -149,6 +149,34 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
   const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [scrolledToToday, setScrolledToToday] = useState(false);
 
+  const [zoom, setZoom] = useState(40);
+  
+  // Prevent default pinch zoom on the container to allow custom useGesture pinch
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const preventPinch = (e: TouchEvent) => {
+      if (e.touches.length > 1) {
+        e.preventDefault();
+      }
+    };
+    el.addEventListener("touchmove", preventPinch, { passive: false });
+    return () => el.removeEventListener("touchmove", preventPinch);
+  }, []);
+
+  useGesture(
+    {
+      onPinch: ({ offset: [s] }) => {
+        setZoom(Math.max(10, Math.min(80, s)));
+      },
+    },
+    {
+      target: scrollRef,
+      pinch: { scaleBounds: { min: 10, max: 80 }, modifierKey: "ctrlKey" },
+      eventOptions: { passive: false },
+    }
+  );
+
   const safeProjects = (projects || []).filter((p) => p.status !== "ferdig");
   const datedProjects = safeProjects.filter((p) => p.start_date && p.estimated_end_date);
   const today = new Date().toISOString().split("T")[0];
@@ -158,13 +186,11 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
   const earliestDate = allProjectDates.length > 0 ? allProjectDates.sort()[0] : today;
   const latestDate = allProjectDates.length > 0 ? allProjectDates.sort().reverse()[0] : today;
 
-  // Start 14 days before the earlier of today or earliest project
   const startAnchor = earliestDate < today ? earliestDate : today;
   const rangeStartD = new Date(startAnchor);
   rangeStartD.setDate(rangeStartD.getDate() - 14);
   const rangeStartStr = rangeStartD.toISOString().split("T")[0];
 
-  // End 28 days after latest, minimum 42 days from today
   const endFromProjects = new Date(latestDate);
   endFromProjects.setDate(endFromProjects.getDate() + 28);
   const endFromToday = new Date(today);
@@ -173,7 +199,7 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
   const rangeEndStr = rangeEndD.toISOString().split("T")[0];
 
   const totalDays = Math.max(1, daysBetween(rangeStartStr, rangeEndStr));
-  const gridWidth = totalDays * DAY_W;
+  const gridWidth = totalDays * zoom;
 
   // --- Build days array ---
   const days: { dateStr: string; dayNum: number; dow: number; month: number; year: number }[] = [];
@@ -182,7 +208,7 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
     days.push({
       dateStr: dCur.toISOString().split("T")[0],
       dayNum: dCur.getDate(),
-      dow: dCur.getDay(), // 0=Sun, 6=Sat
+      dow: dCur.getDay(),
       month: dCur.getMonth(),
       year: dCur.getFullYear(),
     });
@@ -240,11 +266,11 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
   useEffect(() => {
     if (scrolledToToday || !scrollRef.current) return;
     const el = scrollRef.current;
-    const todayX = todayIdx * DAY_W;
+    const todayX = todayIdx * zoom;
     const viewWidth = el.clientWidth;
     el.scrollLeft = todayX - viewWidth / 2;
     setScrolledToToday(true);
-  }, [scrolledToToday, todayIdx]);
+  }, [scrolledToToday, todayIdx, zoom]);
 
   // --- Hover handlers ---
   const handleBarMouseMove = useCallback((e: React.MouseEvent) => {
@@ -281,23 +307,23 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
   if (safeProjects.length === 0) {
     const activeCheckins = (checkins || []).filter((c) => c.status === "checked_in");
     return (
-      <div className="rounded-xl" style={{ border: "1px solid var(--card-border)", backgroundColor: "var(--card-bg)", minHeight: 400 }}>
+      <div className="rounded-xl border border-border bg-card min-h-[400px]">
         {activeCheckins.length > 0 && (
           <div className="p-5 pb-3">
-            <p className="text-[11px] font-semibold uppercase mb-3" style={{ color: "var(--muted-light)", letterSpacing: "0.04em" }}>Aktive i dag</p>
+            <p className="text-[11px] font-semibold uppercase mb-3 text-muted-foreground/70 tracking-[0.04em]">Aktive i dag</p>
             <div className="flex gap-3 flex-wrap">
               {activeCheckins.map((c) => {
                 const empColor = EMPLOYEE_COLORS[c.employee] || "#4CAF50";
                 return (
-                  <div key={c.employee} className="flex items-start gap-3 rounded-lg" style={{ border: "1px solid var(--card-border)", backgroundColor: "var(--surface)", padding: "12px 16px", flex: "1 1 200px", maxWidth: 340 }}>
+                  <div key={c.employee} className="flex items-start gap-3 rounded-lg border border-border bg-muted/50 py-3 px-4 flex-[1_1_200px] max-w-[340px]">
                     <div className="flex shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white mt-0.5" style={{ width: 22, height: 22, backgroundColor: empColor }}>{c.employee[0]}</div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="text-[13px] font-semibold" style={{ color: "var(--foreground)" }}>{c.employee}</span>
-                        {c.projectNumber && <span className="text-[11px] font-medium" style={{ color: "var(--muted-light)" }}>#{c.projectNumber}</span>}
-                        {c.time && <span className="ml-auto text-[10px]" style={{ color: "var(--muted-light)" }}>kl. {c.time}</span>}
+                        <span className="text-[13px] font-semibold text-foreground">{c.employee}</span>
+                        {c.projectNumber && <span className="text-[11px] font-medium text-muted-foreground/70">#{c.projectNumber}</span>}
+                        {c.time && <span className="ml-auto text-[10px] text-muted-foreground/70">kl. {c.time}</span>}
                       </div>
-                      {c.summary && <p className="mt-1 text-[12px] leading-snug" style={{ color: "var(--muted)" }}>{c.summary}</p>}
+                      {c.summary && <p className="mt-1 text-[12px] leading-snug text-muted-foreground">{c.summary}</p>}
                     </div>
                   </div>
                 );
@@ -306,204 +332,235 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
           </div>
         )}
         <div className="flex flex-col items-center justify-center" style={{ minHeight: activeCheckins.length > 0 ? 200 : 400 }}>
-          <svg width="48" height="48" viewBox="0 0 48 48" fill="none" style={{ color: "var(--muted-light)", opacity: 0.5 }}>
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none" className="text-muted-foreground/30">
             <rect x="4" y="12" width="40" height="4" rx="2" fill="currentColor" />
             <rect x="4" y="22" width="28" height="4" rx="2" fill="currentColor" />
             <rect x="4" y="32" width="34" height="4" rx="2" fill="currentColor" />
           </svg>
-          <p className="mt-4 text-[15px] font-semibold" style={{ color: "var(--foreground)" }}>Ingen prosjekter enn&aring;</p>
-          <p className="mt-1 text-[13px]" style={{ color: "var(--muted-light)" }}>Prosjekter vil vises her n&aring;r de opprettes</p>
+          <p className="mt-4 text-[15px] font-semibold text-foreground">Ingen prosjekter enn&aring;</p>
+          <p className="mt-1 text-[13px] text-muted-foreground/70">Prosjekter vil vises her n&aring;r de opprettes</p>
         </div>
       </div>
     );
   }
 
+  const showDayNum = zoom >= 20;
+
   // ===================== RENDER =====================
   return (
-    <div ref={containerRef} className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--card-border)", backgroundColor: "var(--card-bg)" }}>
-      <div className="flex">
-        {/* ── Fixed left column ── */}
-        <div className="shrink-0" style={{ width: LEFT_COL, borderRight: "1px solid #E0E0E0" }}>
-          {/* Header spacer */}
-          <div className="flex items-end pb-2 pl-5 text-[11px] font-semibold uppercase" style={{ height: HEADER_HEIGHT, color: "var(--muted-light)", borderBottom: "1px solid #E0E0E0", letterSpacing: "0.04em" }}>
-            Prosjekt
-          </div>
-          {/* Employee headers + project labels */}
-          <div className="relative" style={{ height: totalHeight }}>
-            {headers.map((h) => (
-              <div key={h.label} className="absolute flex items-center gap-2 pl-5" style={{ top: h.y, width: LEFT_COL, height: EMP_HEADER, backgroundColor: "#FAFAFA", borderBottom: "1px solid #F0F0F0" }}>
-                <span className="rounded-full" style={{ width: 8, height: 8, backgroundColor: h.color }} />
-                <span className="text-[12px] font-semibold" style={{ color: "var(--foreground)" }}>{h.label}</span>
-              </div>
-            ))}
-            {rows.map((row) => {
-              const p = row.project;
-              const isFerdig = p.status === "ferdig";
-              return (
-                <div key={`lbl-${p.project_number}`} className="absolute flex items-center pl-5 pr-3" style={{ top: row.y, width: LEFT_COL, height: ROW_HEIGHT, borderBottom: "1px solid #F8F8F8" }}>
-                  <Link href={`/project/${p.project_number}`} className="truncate text-[12px] hover:underline">
-                    <span style={{ color: "var(--muted-light)" }}>#{p.project_number}</span>{" "}
-                    <span style={{ color: isFerdig ? "var(--muted-light)" : "var(--foreground)", textDecoration: isFerdig ? "line-through" : "none" }}>{p.name}</span>
-                    {p.dependency && <span className="ml-1 text-[10px] italic" style={{ color: "#999" }}>&larr; #{p.dependency}</span>}
-                  </Link>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* ── Scrollable day grid ── */}
-        <div ref={scrollRef} className="flex-1 overflow-x-auto" style={{ scrollBehavior: "smooth" }}>
-          <div style={{ width: gridWidth, position: "relative" }}>
-            {/* Day header */}
-            <div className="sticky top-0 z-10" style={{ height: HEADER_HEIGHT, borderBottom: "1px solid #E0E0E0", backgroundColor: "var(--card-bg)" }}>
-              {/* Month row */}
-              {monthSpans.map((m) => (
-                <div key={`m-${m.startIdx}`} className="absolute flex items-center pl-2" style={{ left: m.startIdx * DAY_W, width: m.count * DAY_W, top: 0, height: MONTH_ROW, borderLeft: "1px solid #E0E0E0" }}>
-                  <span className="text-[11px] font-semibold whitespace-nowrap" style={{ color: "var(--muted)", letterSpacing: "0.02em" }}>{m.label}</span>
-                </div>
-              ))}
-              {/* Day number row */}
-              {days.map((d, i) => {
-                const isToday = d.dateStr === today;
-                const isWeekend = d.dow === 0 || d.dow === 6;
-                const isFirstOfMonth = i === 0 || d.month !== days[i - 1].month;
-                return (
-                  <div
-                    key={d.dateStr}
-                    className="absolute flex items-center justify-center"
-                    style={{
-                      left: i * DAY_W,
-                      width: DAY_W,
-                      top: MONTH_ROW,
-                      height: DAY_ROW,
-                      borderLeft: isFirstOfMonth ? "1px solid #E0E0E0" : "1px solid #F0F0F0",
-                      backgroundColor: isToday ? "rgba(229, 57, 53, 0.08)" : isWeekend ? "#F8F8F8" : undefined,
-                    }}
-                  >
-                    <span className="text-[10px] font-medium" style={{ color: isToday ? "#E53935" : isWeekend ? "#BBB" : "var(--muted-light)" }}>{d.dayNum}</span>
-                  </div>
-                );
-              })}
-              {/* "I dag" red dot */}
-              {todayIdx >= 0 && todayIdx < totalDays && (
-                <div className="absolute z-30" style={{ left: todayIdx * DAY_W + DAY_W / 2 - 3, top: MONTH_ROW - 2 }}>
-                  <div className="rounded-full" style={{ width: 6, height: 6, backgroundColor: "#E53935" }} />
-                </div>
-              )}
-            </div>
-
-            {/* Day grid body */}
-            <div className="relative" style={{ height: totalHeight }}>
-              {/* Day column backgrounds */}
-              {days.map((d, i) => {
-                const isToday = d.dateStr === today;
-                const isWeekend = d.dow === 0 || d.dow === 6;
-                const isFirstOfMonth = i === 0 || d.month !== days[i - 1].month;
-                if (!isToday && !isWeekend && !isFirstOfMonth) return null;
-                return (
-                  <div
-                    key={`bg-${d.dateStr}`}
-                    className="absolute pointer-events-none"
-                    style={{
-                      left: i * DAY_W,
-                      width: DAY_W,
-                      top: 0,
-                      height: totalHeight,
-                      backgroundColor: isToday ? "rgba(229, 57, 53, 0.04)" : isWeekend ? "#FAFAFA" : undefined,
-                      borderLeft: isFirstOfMonth ? "1px solid #E8E8E8" : undefined,
-                    }}
-                  />
-                );
-              })}
-
-              {/* Today vertical line */}
-              {todayIdx >= 0 && todayIdx < totalDays && (
-                <div className="absolute z-10 pointer-events-none" style={{ left: todayIdx * DAY_W + DAY_W / 2, top: 0, width: 1, height: totalHeight, backgroundColor: "#E53935", opacity: 0.5 }} />
-              )}
-
-              {/* Employee header row backgrounds */}
-              {headers.map((h) => (
-                <div key={`hbg-${h.label}`} className="absolute" style={{ top: h.y, left: 0, width: gridWidth, height: EMP_HEADER, backgroundColor: "#FAFAFA", borderBottom: "1px solid #F0F0F0" }} />
-              ))}
-
-              {/* Row borders */}
-              {rows.map((row) => (
-                <div key={`rb-${row.project.project_number}`} className="absolute pointer-events-none" style={{ top: row.y + ROW_HEIGHT - 1, left: 0, width: gridWidth, height: 1, backgroundColor: "#F8F8F8" }} />
-              ))}
-
-              {/* Project bars */}
-              {rows.map((row) => {
-                const p = row.project;
-                if (!p.start_date || !p.estimated_end_date) {
-                  return (
-                    <div key={p.project_number} className="absolute flex items-center pl-2" style={{ top: row.y, left: 0, height: ROW_HEIGHT }}>
-                      <span className="rounded px-2 py-0.5 text-[10px] font-medium" style={{ backgroundColor: STATUS_COLORS_SOFT[p.status] || "#eee", color: "#555" }}>
-                        {STATUS_LABELS[p.status] || p.status}
-                      </span>
-                    </div>
-                  );
-                }
-
-                const startI = dayIndex(rangeStartStr, p.start_date);
-                const endI = dayIndex(rangeStartStr, p.estimated_end_date);
-                const barDays = Math.max(1, endI - startI + 1);
-                const barLeft = startI * DAY_W;
-                const barWidth = barDays * DAY_W;
-                const isHovered = hoveredProject === p.project_number;
-                const bs = getBarStyle(p, today);
-                const empColor = EMPLOYEE_COLORS[p.assigned || ""] || null;
-
-                return (
-                  <div
-                    key={p.project_number}
-                    className="absolute"
-                    style={{ top: row.y, left: barLeft, width: barWidth, height: ROW_HEIGHT }}
-                  >
-                    <div
-                      className="absolute flex items-center cursor-pointer transition-shadow"
-                      style={{
-                        left: 0,
-                        width: barWidth,
-                        height: BAR_HEIGHT,
-                        top: (ROW_HEIGHT - BAR_HEIGHT) / 2,
-                        backgroundColor: bs.bg,
-                        border: isHovered ? "1px solid rgba(0,0,0,0.3)" : bs.border,
-                        borderRadius: 3,
-                        boxShadow: isHovered ? "0 2px 6px rgba(0,0,0,0.12)" : "none",
-                      }}
-                      onMouseEnter={(e) => handleBarEnter(p.project_number, e)}
-                      onMouseMove={handleBarMouseMove}
-                      onMouseLeave={handleBarLeave}
-                    >
-                      {empColor && (
-                        <div
-                          className="flex shrink-0 items-center justify-center rounded-full text-[7px] font-bold text-white ml-1"
-                          style={{ width: 16, height: 16, backgroundColor: empColor }}
-                        >
-                          {(p.assigned || "?")[0]}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
+    <div className="space-y-4">
+      <div className="flex justify-end gap-2">
+        <button
+          onClick={() => setZoom(40)}
+          className={`px-3 py-1.5 text-xs font-semibold rounded-full min-h-[44px] cursor-pointer transition-colors ${zoom >= 30 ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground hover:bg-secondary/80"}`}
+        >
+          Uke
+        </button>
+        <button
+          onClick={() => setZoom(15)}
+          className={`px-3 py-1.5 text-xs font-semibold rounded-full min-h-[44px] cursor-pointer transition-colors ${zoom < 30 ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground hover:bg-secondary/80"}`}
+        >
+          Måned
+        </button>
       </div>
 
-      {/* Hover popup */}
-      {hoveredData && (
-        <HoverPopup
-          project={hoveredData}
-          x={popupPos.x}
-          y={popupPos.y}
-          projects={safeProjects}
-          onMouseEnter={handlePopupEnter}
-          onMouseLeave={handlePopupLeave}
-        />
-      )}
+      <div ref={containerRef} className="rounded-xl overflow-hidden border border-border bg-card">
+        <div className="flex">
+          {/* ── Fixed left column ── */}
+          <div className="shrink-0 bg-card z-20" style={{ width: LEFT_COL, borderRight: "1px solid var(--border)" }}>
+            {/* Header spacer */}
+            <div className="flex items-end pb-2 pl-5 text-[11px] font-semibold uppercase text-muted-foreground/70 tracking-[0.04em]" style={{ height: HEADER_HEIGHT, borderBottom: "1px solid var(--border)" }}>
+              Prosjekt
+            </div>
+            {/* Employee headers + project labels */}
+            <div className="relative" style={{ height: totalHeight }}>
+              {headers.map((h) => (
+                <div key={h.label} className="absolute flex items-center gap-2 pl-5 bg-secondary/30" style={{ top: h.y, width: LEFT_COL, height: EMP_HEADER, borderBottom: "1px solid var(--border)" }}>
+                  <span className="rounded-full" style={{ width: 8, height: 8, backgroundColor: h.color }} />
+                  <span className="text-[12px] font-semibold text-foreground">{h.label}</span>
+                </div>
+              ))}
+              {rows.map((row) => {
+                const p = row.project;
+                const isFerdig = p.status === "ferdig";
+                return (
+                  <div key={`lbl-${p.project_number}`} className="absolute flex items-center pl-5 pr-3 bg-card" style={{ top: row.y, width: LEFT_COL, height: ROW_HEIGHT, borderBottom: "1px solid var(--border)" }}>
+                    <Link href={`/project/${p.project_number}`} className="truncate text-[12px] hover:underline flex items-center h-full w-full">
+                      <span className="text-muted-foreground/70 mr-1">#{p.project_number}</span>
+                      <span className={isFerdig ? "text-muted-foreground/70 line-through" : "text-foreground"}>{p.name}</span>
+                      {p.dependency && <span className="ml-1 text-[10px] italic text-muted-foreground/70">&larr; #{p.dependency}</span>}
+                    </Link>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ── Scrollable day grid ── */}
+          <div ref={scrollRef} className="flex-1 overflow-x-auto touch-pan-x" style={{ scrollBehavior: "smooth", touchAction: "pan-x" }}>
+            <div style={{ width: gridWidth, position: "relative" }}>
+              {/* Day header */}
+              <div className="sticky top-0 z-10 bg-card" style={{ height: HEADER_HEIGHT, borderBottom: "1px solid var(--border)" }}>
+                {/* Month row */}
+                {monthSpans.map((m) => (
+                  <div key={`m-${m.startIdx}`} className="absolute flex items-center pl-2" style={{ left: m.startIdx * zoom, width: m.count * zoom, top: 0, height: MONTH_ROW, borderLeft: "1px solid var(--border)" }}>
+                    <span className="text-[11px] font-semibold whitespace-nowrap text-muted-foreground tracking-[0.02em]">{m.label}</span>
+                  </div>
+                ))}
+                {/* Day number row */}
+                {days.map((d, i) => {
+                  const isToday = d.dateStr === today;
+                  const isWeekend = d.dow === 0 || d.dow === 6;
+                  const isFirstOfMonth = i === 0 || d.month !== days[i - 1].month;
+                  return (
+                    <div
+                      key={d.dateStr}
+                      className="absolute flex items-center justify-center"
+                      style={{
+                        left: i * zoom,
+                        width: zoom,
+                        top: MONTH_ROW,
+                        height: DAY_ROW,
+                        borderLeft: isFirstOfMonth ? "1px solid var(--border)" : "1px solid var(--border)",
+                        backgroundColor: isToday ? "rgba(229, 57, 53, 0.08)" : isWeekend ? "var(--secondary)" : undefined,
+                      }}
+                    >
+                      {showDayNum && (
+                        <span className="text-[10px] font-medium" style={{ color: isToday ? "#E53935" : isWeekend ? "var(--muted-foreground)" : "var(--muted-foreground)" }}>
+                          {d.dayNum}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+                {/* "I dag" red dot */}
+                {todayIdx >= 0 && todayIdx < totalDays && (
+                  <div className="absolute z-30" style={{ left: todayIdx * zoom + zoom / 2 - 3, top: MONTH_ROW - 2 }}>
+                    <div className="rounded-full" style={{ width: 6, height: 6, backgroundColor: "#E53935" }} />
+                  </div>
+                )}
+              </div>
+
+              {/* Day grid body */}
+              <div className="relative" style={{ height: totalHeight }}>
+                {/* Day column backgrounds */}
+                {days.map((d, i) => {
+                  const isToday = d.dateStr === today;
+                  const isWeekend = d.dow === 0 || d.dow === 6;
+                  const isFirstOfMonth = i === 0 || d.month !== days[i - 1].month;
+                  if (!isToday && !isWeekend && !isFirstOfMonth) return null;
+                  return (
+                    <div
+                      key={`bg-${d.dateStr}`}
+                      className="absolute pointer-events-none"
+                      style={{
+                        left: i * zoom,
+                        width: zoom,
+                        top: 0,
+                        height: totalHeight,
+                        backgroundColor: isToday ? "rgba(229, 57, 53, 0.04)" : isWeekend ? "var(--secondary)" : undefined,
+                        borderLeft: isFirstOfMonth ? "1px solid var(--border)" : undefined,
+                        opacity: isWeekend ? 0.3 : 1
+                      }}
+                    />
+                  );
+                })}
+
+                {/* Today vertical line */}
+                {todayIdx >= 0 && todayIdx < totalDays && (
+                  <div className="absolute z-10 pointer-events-none" style={{ left: todayIdx * zoom + zoom / 2, top: 0, width: 1, height: totalHeight, backgroundColor: "#E53935", opacity: 0.5 }} />
+                )}
+
+                {/* Employee header row backgrounds */}
+                {headers.map((h) => (
+                  <div key={`hbg-${h.label}`} className="absolute bg-secondary/30 pointer-events-none" style={{ top: h.y, left: 0, width: gridWidth, height: EMP_HEADER, borderBottom: "1px solid var(--border)" }} />
+                ))}
+
+                {/* Row borders */}
+                {rows.map((row) => (
+                  <div key={`rb-${row.project.project_number}`} className="absolute pointer-events-none bg-border" style={{ top: row.y + ROW_HEIGHT - 1, left: 0, width: gridWidth, height: 1 }} />
+                ))}
+
+                {/* Project bars */}
+                {rows.map((row) => {
+                  const p = row.project;
+                  if (!p.start_date || !p.estimated_end_date) {
+                    return (
+                      <div key={p.project_number} className="absolute flex items-center pl-2" style={{ top: row.y, left: 0, height: ROW_HEIGHT }}>
+                        <span className="rounded px-2 py-0.5 text-[10px] font-medium" style={{ backgroundColor: STATUS_COLORS_SOFT[p.status] || "#eee", color: "#555" }}>
+                          {STATUS_LABELS[p.status] || p.status}
+                        </span>
+                      </div>
+                    );
+                  }
+
+                  const startI = dayIndex(rangeStartStr, p.start_date);
+                  const endI = dayIndex(rangeStartStr, p.estimated_end_date);
+                  const barDays = Math.max(1, endI - startI + 1);
+                  const barLeft = startI * zoom;
+                  const barWidth = barDays * zoom;
+                  const isHovered = hoveredProject === p.project_number;
+                  const bs = getBarStyle(p, today);
+                  const empColor = EMPLOYEE_COLORS[p.assigned || ""] || null;
+
+                  return (
+                    <div
+                      key={p.project_number}
+                      className="absolute"
+                      style={{ top: row.y, left: barLeft, width: barWidth, height: ROW_HEIGHT }}
+                    >
+                      <div
+                        className="absolute flex items-center cursor-pointer transition-shadow"
+                        style={{
+                          left: 0,
+                          width: barWidth,
+                          height: BAR_HEIGHT,
+                          top: (ROW_HEIGHT - BAR_HEIGHT) / 2,
+                          backgroundColor: bs.bg,
+                          border: isHovered ? "1px solid rgba(0,0,0,0.3)" : bs.border,
+                          borderRadius: 6,
+                          boxShadow: isHovered ? "0 2px 6px rgba(0,0,0,0.12)" : "none",
+                        }}
+                        onMouseEnter={(e) => handleBarEnter(p.project_number, e)}
+                        onMouseMove={handleBarMouseMove}
+                        onMouseLeave={handleBarLeave}
+                        onClick={(e) => {
+                          // Allow touch devices to view tooltip easily on tap
+                          if (window.innerWidth < 1024) {
+                            handleBarEnter(p.project_number, e);
+                            setTimeout(() => handleBarLeave(), 3000);
+                          }
+                        }}
+                      >
+                        {empColor && showDayNum && (
+                          <div
+                            className="flex shrink-0 items-center justify-center rounded-full text-[8px] font-bold text-white ml-1.5"
+                            style={{ width: 16, height: 16, backgroundColor: empColor }}
+                          >
+                            {(p.assigned || "?")[0]}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Hover popup */}
+        {hoveredData && (
+          <HoverPopup
+            project={hoveredData}
+            x={popupPos.x}
+            y={popupPos.y}
+            projects={safeProjects}
+            onMouseEnter={handlePopupEnter}
+            onMouseLeave={handlePopupLeave}
+          />
+        )}
+      </div>
     </div>
   );
 }
@@ -541,25 +598,16 @@ function HoverPopup({
 
   return (
     <div
-      className="popup-enter"
-      style={{
-        position: "fixed",
-        left: x,
-        top: y,
-        width: 380,
-        zIndex: 9999,
-        backgroundColor: "var(--card-bg)",
-        borderRadius: 12,
-        boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
-      }}
+      className="popup-enter fixed z-[9999] w-[380px] rounded-xl shadow-xl bg-card border border-border"
+      style={{ left: x, top: y }}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
     >
       <div className="p-5 pb-0">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
-            <Link href={`/project/${p.project_number}`} className="text-[11px] hover:underline" style={{ color: "var(--muted-light)" }}>#{p.project_number}</Link>
-            <p className="mt-0.5 text-[15px] font-bold" style={{ color: "var(--foreground)" }}>{p.name}</p>
+            <Link href={`/project/${p.project_number}`} className="text-[11px] hover:underline text-muted-foreground/70">#{p.project_number}</Link>
+            <p className="mt-0.5 text-[15px] font-bold text-foreground">{p.name}</p>
           </div>
           <span className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold" style={{ backgroundColor: STATUS_COLORS_SOFT[p.status] || "#eee", color: "#444" }}>
             {STATUS_LABELS[p.status] || p.status}
@@ -567,29 +615,29 @@ function HoverPopup({
         </div>
 
         {p.assigned && (
-          <div className="mb-3 flex items-center gap-2 text-[13px]" style={{ color: "var(--muted)" }}>
+          <div className="mb-3 flex items-center gap-2 text-[13px] text-muted-foreground">
             <span className="rounded-full" style={{ width: 8, height: 8, backgroundColor: EMPLOYEE_COLORS[p.assigned] || "#888" }} />
             <span className="font-medium">{p.assigned}</span>
           </div>
         )}
 
         {dep && (
-          <p className="mb-3 text-[12px]" style={{ color: "var(--muted)" }}>
+          <p className="mb-3 text-[12px] text-muted-foreground">
             Avhenger av{" "}
-            <span className="font-medium" style={{ color: "var(--foreground)" }}>#{dep.project_number} {dep.name}</span>
+            <span className="font-medium text-foreground">#{dep.project_number} {dep.name}</span>
             {dep.status !== "ferdig" && <span className="ml-1 font-medium" style={{ color: "#E5A940" }}>(ikke ferdig)</span>}
           </p>
         )}
 
-        <div className="mb-4 grid grid-cols-2 gap-x-6 gap-y-1.5 text-[12px]" style={{ color: "var(--foreground)" }}>
-          {p.start_date && <div><span style={{ color: "var(--muted-light)" }}>Start: </span>{formatDate(p.start_date)}</div>}
-          {p.estimated_end_date && <div><span style={{ color: "var(--muted-light)" }}>Slutt: </span>{p.end_date_defaulted ? "Ikke estimert" : formatDate(p.estimated_end_date)}</div>}
-          {p.agreed_price != null && <div><span style={{ color: "var(--muted-light)" }}>Pris: </span>{formatPrice(p.agreed_price)}</div>}
-          {duration != null && <div><span style={{ color: "var(--muted-light)" }}>Varighet: </span>{duration} {duration === 1 ? "dag" : "dager"}</div>}
+        <div className="mb-4 grid grid-cols-2 gap-x-6 gap-y-1.5 text-[12px] text-foreground">
+          {p.start_date && <div><span className="text-muted-foreground/70">Start: </span>{formatDate(p.start_date)}</div>}
+          {p.estimated_end_date && <div><span className="text-muted-foreground/70">Slutt: </span>{p.end_date_defaulted ? "Ikke estimert" : formatDate(p.estimated_end_date)}</div>}
+          {p.agreed_price != null && <div><span className="text-muted-foreground/70">Pris: </span>{formatPrice(p.agreed_price)}</div>}
+          {duration != null && <div><span className="text-muted-foreground/70">Varighet: </span>{duration} {duration === 1 ? "dag" : "dager"}</div>}
         </div>
       </div>
 
-      <div className="px-5 pt-4 pb-3" style={{ borderTop: "1px solid var(--divider)" }}>
+      <div className="px-5 pt-4 pb-3 border-t border-border">
         <div className="flex items-center mb-4">
           {stages.map((s, i) => {
             const state = getStageState(s, activeStage, allChecklistsPassed, isFerdig);
@@ -597,17 +645,17 @@ function HoverPopup({
             let bg: string, borderCol: string, text: string;
             if (state === "completed") { bg = "#22c55e"; borderCol = "#22c55e"; text = "#fff"; }
             else if (state === "active") { bg = "#4CAF50"; borderCol = "#4CAF50"; text = "#fff"; }
-            else { bg = "transparent"; borderCol = "#D0D0D0"; text = "#999"; }
+            else { bg = "transparent"; borderCol = "var(--border)"; text = "var(--muted-foreground)"; }
             return (
-              <div key={s} className="flex items-center" style={{ flex: 1 }}>
-                <button className="flex flex-col items-center gap-1 flex-1 cursor-pointer" onClick={() => setViewingStage(s)}>
+              <div key={s} className="flex items-center flex-1">
+                <button className="flex flex-col items-center gap-1 flex-1 cursor-pointer min-h-[44px]" onClick={() => setViewingStage(s)}>
                   <div className="flex items-center justify-center rounded-full text-[11px] font-semibold" style={{ width: 24, height: 24, backgroundColor: bg, border: `2px solid ${borderCol}`, color: text, boxShadow: isViewing ? "0 0 0 2px rgba(76,175,80,0.2)" : "none" }}>
                     {state === "completed" ? "\u2713" : s}
                   </div>
-                  <span className="text-[10px] font-medium" style={{ color: isViewing ? "var(--foreground)" : "var(--muted-light)" }}>{STAGE_LABELS[s]}</span>
+                  <span className={`text-[10px] font-medium ${isViewing ? "text-foreground" : "text-muted-foreground/70"}`}>{STAGE_LABELS[s]}</span>
                 </button>
                 {i < 2 && (
-                  <svg width="16" height="10" viewBox="0 0 16 10" className="-mt-3.5 mx-0.5" style={{ opacity: 0.3 }}>
+                  <svg width="16" height="10" viewBox="0 0 16 10" className="-mt-3.5 mx-0.5 opacity-30 text-foreground">
                     <path d="M2,1 L8,5 L2,9" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 )}
@@ -617,19 +665,19 @@ function HoverPopup({
         </div>
 
         <div className="mb-1">
-          <p className="text-[10px] font-semibold uppercase mb-1.5" style={{ color: "var(--muted-light)", letterSpacing: "0.04em" }}>{viewingStage}. {STAGE_LABELS[viewingStage]}</p>
+          <p className="text-[10px] font-semibold uppercase mb-1.5 text-muted-foreground/70 tracking-[0.04em]">{viewingStage}. {STAGE_LABELS[viewingStage]}</p>
           {STAGE_ITEMS[viewingStage].map((item, idx) => {
             const done = isItemComplete(viewingStage, idx, activeStage, p.checklists, isFerdig, allChecklistsPassed);
             const linked = getChecklistForItem(viewingStage, idx, p.checklists);
             return (
-              <div key={item} className="flex items-center gap-2" style={{ height: 24 }}>
+              <div key={item} className="flex items-center gap-2 h-6">
                 {done ? (
                   <svg width="14" height="14" viewBox="0 0 14 14" className="shrink-0"><circle cx="7" cy="7" r="6" fill="#22c55e" /><path d="M4,7 L6,9.5 L10,4.5" fill="none" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
                 ) : (
-                  <svg width="14" height="14" viewBox="0 0 14 14" className="shrink-0"><circle cx="7" cy="7" r="5.5" fill="none" stroke="#D0D0D0" strokeWidth="1" /></svg>
+                  <svg width="14" height="14" viewBox="0 0 14 14" className="shrink-0"><circle cx="7" cy="7" r="5.5" fill="none" stroke="var(--border)" strokeWidth="1" /></svg>
                 )}
-                <span className="text-[12px]" style={{ color: done ? "var(--muted-light)" : "var(--foreground)", textDecoration: done ? "line-through" : "none" }}>{item}</span>
-                {linked && <span className="ml-auto text-[10px]" style={{ color: "var(--muted-light)" }}>{linked.done}/{linked.total}</span>}
+                <span className={`text-[12px] ${done ? "text-muted-foreground/70 line-through" : "text-foreground"}`}>{item}</span>
+                {linked && <span className="ml-auto text-[10px] text-muted-foreground/70">{linked.done}/{linked.total}</span>}
               </div>
             );
           })}
@@ -641,7 +689,7 @@ function HoverPopup({
           Sjekklister m&aring; godkjennes f&oslash;r prosjektet kan lukkes
         </div>
       )}
-      <div style={{ height: 4 }} />
+      <div className="h-1" />
     </div>
   );
 }
