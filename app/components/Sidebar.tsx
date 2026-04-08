@@ -344,8 +344,7 @@ export default function Sidebar({ checkins: rawCheckins, checklistEntries: rawEn
       {/* --- MOBILE BOTTOM NAVIGATION --- */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around h-16 border-t border-border bg-card pb-[env(safe-area-inset-bottom)] px-2">
         <Sheet>
-          <SheetTrigger asChild={true}>
-            <button className="flex flex-col items-center justify-center min-h-[44px] w-full max-w-[80px] gap-1 cursor-pointer">
+          <SheetTrigger className="flex flex-col items-center justify-center min-h-[44px] w-full max-w-[80px] gap-1 cursor-pointer">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-foreground">
                 <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
                 <circle cx="9" cy="7" r="4"></circle>
@@ -353,7 +352,6 @@ export default function Sidebar({ checkins: rawCheckins, checklistEntries: rawEn
                 <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
               </svg>
               <span className="text-[10px] font-medium text-foreground">Team</span>
-            </button>
           </SheetTrigger>
           <SheetContent side="bottom" className="h-[80vh] rounded-t-xl px-0 pb-0 overflow-y-auto">
             <SheetHeader className="px-5 text-left">
@@ -364,8 +362,7 @@ export default function Sidebar({ checkins: rawCheckins, checklistEntries: rawEn
         </Sheet>
 
         <Sheet>
-          <SheetTrigger asChild={true}>
-            <button className="flex flex-col items-center justify-center min-h-[44px] w-full max-w-[80px] gap-1 cursor-pointer relative">
+          <SheetTrigger className="flex flex-col items-center justify-center min-h-[44px] w-full max-w-[80px] gap-1 cursor-pointer relative">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-foreground">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                 <polyline points="14 2 14 8 20 8"></polyline>
@@ -379,7 +376,6 @@ export default function Sidebar({ checkins: rawCheckins, checklistEntries: rawEn
                 </span>
               )}
               <span className="text-[10px] font-medium text-foreground">Sjekkliste</span>
-            </button>
           </SheetTrigger>
           <SheetContent side="bottom" className="h-[85vh] rounded-t-xl px-0 pb-0 overflow-y-auto">
             <SheetHeader className="px-5 text-left">
@@ -390,8 +386,7 @@ export default function Sidebar({ checkins: rawCheckins, checklistEntries: rawEn
         </Sheet>
 
         <Sheet>
-          <SheetTrigger asChild={true}>
-            <button className="flex flex-col items-center justify-center min-h-[44px] w-full max-w-[80px] gap-1 cursor-pointer">
+          <SheetTrigger className="flex flex-col items-center justify-center min-h-[44px] w-full max-w-[80px] gap-1 cursor-pointer">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-foreground">
                 <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path>
                 <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path>
@@ -401,7 +396,6 @@ export default function Sidebar({ checkins: rawCheckins, checklistEntries: rawEn
                 <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path>
               </svg>
               <span className="text-[10px] font-medium text-foreground">Poeng</span>
-            </button>
           </SheetTrigger>
           <SheetContent side="bottom" className="h-[80vh] rounded-t-xl px-0 pb-0 overflow-y-auto">
             <SheetHeader className="px-5 text-left">
