@@ -39,11 +39,12 @@ Next.js 16 (App Router) + React 19 + TypeScript
 
 ## Current State
 
-- **Core features working:** Dashboard with timeline/leads tabs, sidebar (team, checklists, leaderboard), project detail with OneDrive/checklists/deviations, command palette search
-- **Recent work:** Scoring overhaul, deviation points, scoreboard interactions (hover/tap), timeline improvements
-- **Unstaged changes:** Multiple component updates + new shadcn UI components (badge, card, command, dialog, input, progress, sheet, skeleton, sonner, textarea)
-- **Employees in system:** Roar, Andrii, Marci
+- **Core features working:** Dashboard with timeline/leads tabs, sidebar (team, checklists, leaderboard), project detail with OneDrive/checklists/deviations, command palette search (Cmd+K)
+- **Recent work:** UI overhaul (sidebar, timeline, lead pipeline, project detail refactor), scoring overhaul, deviation points, scoreboard interactions, SheetTrigger fixes
+- **Working tree:** Clean, all changes committed on `main`
+- **Employees in system:** Roar Aursøy, Andrii Perepelytsia, Marci Marschall, Nick Davidson, Roger Samdal
 - **Lead pipeline stages:** Ny → Kontaktet → Befaring → Oppfølging → Kvalifisert → Konvertert → Tapt
+- **Company ID:** `a12dfbf0-a9d6-4786-95fe-6f1678d9d980` (hardcoded, single-tenant filter)
 
 ## Known Issues
 
