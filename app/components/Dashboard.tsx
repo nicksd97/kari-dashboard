@@ -2,13 +2,14 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import type { Project, Lead, Checkin, ChecklistEntry, EmployeeScore } from "@/lib/types";
+import type { Project, Lead, Checkin, ChecklistEntry, EmployeeScore, Deviation } from "@/lib/types";
 import {
   fetchLiveProjects,
   fetchLiveLeads,
   fetchLiveCheckins,
   fetchLiveChecklistEntries,
   fetchLiveScores,
+  fetchLiveDeviations,
   getDemoData,
   getDemoScores,
 } from "@/lib/data";
@@ -16,6 +17,7 @@ import StatCards from "./StatCards";
 import Timeline from "./Timeline";
 import LeadPipeline from "./LeadPipeline";
 import ProjectsList from "./ProjectsList";
+import DeviationsList from "./DeviationsList";
 import Sidebar from "./Sidebar";
 import {
   CommandDialog,
@@ -35,6 +37,7 @@ interface DashboardProps {
   initialCheckins: Checkin[];
   initialChecklistEntries: ChecklistEntry[];
   initialScores: EmployeeScore[];
+  initialDeviations: Deviation[];
 }
 
 export default function Dashboard({
@@ -43,6 +46,7 @@ export default function Dashboard({
   initialCheckins,
   initialChecklistEntries,
   initialScores,
+  initialDeviations,
 }: DashboardProps) {
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>(initialProjects);
@@ -50,6 +54,7 @@ export default function Dashboard({
   const [checkins, setCheckins] = useState<Checkin[]>(initialCheckins);
   const [checklistEntries, setChecklistEntries] = useState<ChecklistEntry[]>(initialChecklistEntries);
   const [scores, setScores] = useState<EmployeeScore[]>(initialScores);
+  const [deviations, setDeviations] = useState<Deviation[]>(initialDeviations);
   const [source, setSource] = useState<Source>("live");
   const [tab, setTab] = useState<Tab>("timeline");
   const [refreshing, setRefreshing] = useState(false);
@@ -70,23 +75,26 @@ export default function Dashboard({
 
   const loadLive = useCallback(async () => {
     try {
-      const [liveProjects, liveLeads, liveCheckins, liveCl, liveScores] = await Promise.all([
+      const [liveProjects, liveLeads, liveCheckins, liveCl, liveScores, liveDev] = await Promise.all([
         fetchLiveProjects().catch(() => []),
         fetchLiveLeads().catch(() => []),
         fetchLiveCheckins().catch(() => []),
         fetchLiveChecklistEntries().catch(() => []),
         fetchLiveScores().catch(() => []),
+        fetchLiveDeviations().catch(() => []),
       ]);
       const p = Array.isArray(liveProjects) ? liveProjects : [];
       const l = Array.isArray(liveLeads) ? liveLeads : [];
       const ci = Array.isArray(liveCheckins) ? liveCheckins : [];
       const cl = Array.isArray(liveCl) ? liveCl : [];
       const sc = Array.isArray(liveScores) ? liveScores : [];
+      const dv = Array.isArray(liveDev) ? liveDev : [];
       setProjects(p);
       setLeads(l);
       setCheckins(ci);
       setChecklistEntries(cl);
       setScores(sc);
+      setDeviations(dv);
       return p.length > 0 || l.length > 0;
     } catch {
       setProjects([]);
@@ -94,6 +102,7 @@ export default function Dashboard({
       setCheckins([]);
       setChecklistEntries([]);
       setScores([]);
+      setDeviations([]);
       return false;
     }
   }, []);
@@ -105,6 +114,7 @@ export default function Dashboard({
     setCheckins(demo.checkins);
     setChecklistEntries(demo.checklistEntries);
     setScores(getDemoScores());
+    setDeviations(demo.deviations);
   }, []);
 
   const handleToggle = useCallback(async () => {
@@ -254,6 +264,7 @@ export default function Dashboard({
               <>
                 <Timeline projects={projects} checkins={checkins} />
                 <ProjectsList projects={projects} />
+                <DeviationsList deviations={deviations} />
               </>
             ) : (
               <LeadPipeline leads={leads} />

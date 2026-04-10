@@ -39,7 +39,7 @@ Next.js 16 (App Router) + React 19 + TypeScript
 
 ## Current State
 
-- **Core features working:** Dashboard with timeline/leads tabs, sidebar (team, checklists, leaderboard), project detail with OneDrive/checklists/deviations, command palette search (Cmd+K)
+- **Core features working:** Dashboard with timeline/leads tabs, sidebar (team, checklists, leaderboard), project detail with OneDrive/checklists/deviations, command palette search (Cmd+K), Avvik (deviations) section on dashboard front page
 - **Recent work:** UI overhaul (sidebar, timeline, lead pipeline, project detail refactor), scoring overhaul, deviation points, scoreboard interactions, SheetTrigger fixes
 - **Working tree:** Clean, all changes committed on `main`
 - **Employees in system:** Roar Aursøy, Andrii Perepelytsia, Marci Marschall, Nick Davidson, Roger Samdal

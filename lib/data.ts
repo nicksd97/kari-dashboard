@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import type { Project, Lead, Checkin, ChecklistEntry, EmployeeScore } from "./types";
+import type { Project, Lead, Checkin, ChecklistEntry, EmployeeScore, Deviation } from "./types";
 
 const COMPANY_ID = "a12dfbf0-a9d6-4786-95fe-6f1678d9d980";
 
@@ -161,12 +161,19 @@ export async function fetchChecklistEntries(): Promise<ChecklistEntry[]> {
   }
 }
 
+const DEMO_DEVIATIONS: Deviation[] = [
+  { id: "demo-1", project_number: "767", description: "Ikke vibrert ved utstøping", location: "Grunnmur", severity: "medium", status: "assigned", reported_by_name: "Nick Davidson", responsible_name: "Marci Marschall", resolution_deadline: "2026-04-04T12:00:00+00:00", created_at: "2026-04-01T12:00:00+00:00" },
+  { id: "demo-2", project_number: "810", description: "Avvik ved utførelse av vindskier — krever omarbeiding til 90° avslutning", location: "Tak", severity: "high", status: "assigned", reported_by_name: "Nick Davidson", responsible_name: "Roar Aursøy", resolution_deadline: "2026-04-13T08:00:00+00:00", created_at: "2026-04-10T08:00:00+00:00" },
+  { id: "demo-3", project_number: "767", description: "Betong tørket for fort", location: "Fundament", severity: "low", status: "resolved", reported_by_name: "Nick Davidson", responsible_name: "Marci Marschall", resolved_by_name: "Marci Marschall", resolved_at: "2026-04-03T15:00:00+00:00", created_at: "2026-04-01T13:00:00+00:00" },
+];
+
 export function getDemoData() {
   return {
     projects: DEMO_PROJECTS,
     leads: DEMO_LEADS,
     checkins: DEMO_CHECKINS,
     checklistEntries: DEMO_CHECKLIST_ENTRIES,
+    deviations: DEMO_DEVIATIONS,
   };
 }
 
@@ -501,6 +508,55 @@ export async function fetchLiveScores(): Promise<EmployeeScore[]> {
     return scores.sort((a, b) => b.total - a.total);
   } catch (e) {
     console.error("[fetchLiveScores] error:", e);
+    return [];
+  }
+}
+
+export async function fetchLiveDeviations(): Promise<Deviation[]> {
+  try {
+    const { data, error } = await supabase
+      .from("deviations")
+      .select("id, project_number, description, location, severity, status, reported_by_name, responsible_name, resolved_by, resolution_deadline, resolved_at, created_at")
+      .eq("company_id", COMPANY_ID);
+
+    if (error || !data) return [];
+
+    // Resolve resolved_by → employee name (only for resolved rows)
+    const resolverIds = Array.from(
+      new Set(
+        data
+          .filter((d) => d.resolved_by)
+          .map((d) => String(d.resolved_by))
+      )
+    );
+    const resolverNames = new Map<string, string>();
+    if (resolverIds.length > 0) {
+      const { data: emps } = await supabase
+        .from("employees")
+        .select("id, name")
+        .in("id", resolverIds);
+      if (emps) {
+        for (const e of emps) {
+          resolverNames.set(String(e.id), String(e.name));
+        }
+      }
+    }
+
+    return data.map((d: Record<string, unknown>) => ({
+      id: String(d.id || ""),
+      project_number: String(d.project_number || ""),
+      description: String(d.description || ""),
+      location: d.location ? String(d.location) : undefined,
+      severity: String(d.severity || "medium"),
+      status: String(d.status || ""),
+      reported_by_name: d.reported_by_name ? String(d.reported_by_name) : undefined,
+      responsible_name: d.responsible_name ? String(d.responsible_name) : undefined,
+      resolved_by_name: d.resolved_by ? resolverNames.get(String(d.resolved_by)) : undefined,
+      resolution_deadline: d.resolution_deadline ? String(d.resolution_deadline) : undefined,
+      resolved_at: d.resolved_at ? String(d.resolved_at) : undefined,
+      created_at: String(d.created_at || ""),
+    })) as Deviation[];
+  } catch {
     return [];
   }
 }

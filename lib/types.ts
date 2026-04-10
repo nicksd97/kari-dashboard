@@ -134,3 +134,30 @@ export const LEAD_STATUS_COLORS: Record<string, string> = {
   converted: "#C0DD97",
   lost: "#F5C4B3",
 };
+
+export interface Deviation {
+  id: string;
+  project_number: string;
+  description: string;
+  location?: string;
+  severity: "low" | "medium" | "high" | string;
+  status: string;
+  reported_by_name?: string;
+  responsible_name?: string;
+  resolved_by_name?: string;
+  resolution_deadline?: string;
+  resolved_at?: string;
+  created_at: string;
+}
+
+export const SEVERITY_LABELS: Record<string, string> = {
+  low: "Lav",
+  medium: "Medium",
+  high: "Høy",
+};
+
+export const SEVERITY_COLORS: Record<string, { bg: string; fg: string }> = {
+  low: { bg: "#C0DD97", fg: "#3a5a1a" },
+  medium: { bg: "#FAC775", fg: "#7a4a00" },
+  high: { bg: "#F5C4B3", fg: "#8a1a00" },
+};
