@@ -187,8 +187,9 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
     }
   );
 
-  const safeProjects = (projects || []).filter((p) => p.status !== "ferdig");
-  const datedProjects = safeProjects.filter((p) => p.start_date && p.estimated_end_date);
+  const isValidProjectNum = (pn: string) => /^[0-9]{3}$/.test(pn);
+  const safeProjects = (projects || []).filter((p) => p.status !== "ferdig" && isValidProjectNum(p.project_number));
+  const datedProjects = safeProjects.filter((p) => p.start_date && p.estimated_end_date && p.assigned);
   const today = new Date().toISOString().split("T")[0];
 
   // --- Timeline range ---
@@ -262,6 +263,8 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
   if (hasCheckinData) {
     for (const entry of timelineEntries) {
       const emp = entry.employeeName;
+      if (!EMPLOYEES.includes(emp)) continue;
+      if (!isValidProjectNum(entry.projectNumber)) continue;
       allEmployees.add(emp);
       if (!groupedRows[emp]) groupedRows[emp] = [];
       checkinCovered.add(`${emp}|${entry.projectNumber}`);
@@ -288,7 +291,7 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
 
   // Fallback: projects with assigned_to but no check-in data for that employee+project
   for (const p of datedProjects) {
-    if (!p.assigned) continue;
+    if (!p.assigned || !EMPLOYEES.includes(p.assigned)) continue;
     const key = `${p.assigned}|${p.project_number}`;
     if (checkinCovered.has(key)) continue;
     allEmployees.add(p.assigned);
@@ -300,32 +303,8 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
     });
   }
 
-  // Unassigned dated projects (no check-in, no assigned_to)
-  const unassignedDated = datedProjects.filter(
-    (p) => !p.assigned && !timelineEntries?.some((e) => e.projectNumber === p.project_number)
-  );
-  if (unassignedDated.length > 0) {
-    groupedRows["Ikke tildelt"] = unassignedDated.map((p) => ({
-      project: p,
-      y: 0,
-      fromCheckins: false,
-    }));
-    allEmployees.add("Ikke tildelt");
-  }
-
-  const undated = safeProjects.filter((p) => !p.start_date || !p.estimated_end_date);
-
-  // Sort employees: known EMPLOYEES first, then others alphabetically, "Ikke tildelt" last
-  const sortedEmployees = Array.from(allEmployees).sort((a, b) => {
-    if (a === "Ikke tildelt") return 1;
-    if (b === "Ikke tildelt") return -1;
-    const aIdx = EMPLOYEES.indexOf(a);
-    const bIdx = EMPLOYEES.indexOf(b);
-    if (aIdx >= 0 && bIdx >= 0) return aIdx - bIdx;
-    if (aIdx >= 0) return -1;
-    if (bIdx >= 0) return 1;
-    return a.localeCompare(b, "nb-NO");
-  });
+  // Only show known field employees on the timeline
+  const sortedEmployees = EMPLOYEES.filter((emp) => groupedRows[emp]?.length > 0);
 
   // --- Layout rows ---
   let y = 0;
@@ -338,11 +317,6 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
     headers.push({ label: emp, color: EMPLOYEE_COLORS[emp] || "#999", y });
     y += EMP_HEADER;
     group.forEach((row) => { row.y = y; rows.push(row); y += ROW_HEIGHT; });
-  }
-  if (undated.length > 0) {
-    headers.push({ label: "Uten dato", color: "#999", y });
-    y += EMP_HEADER;
-    undated.forEach((p) => { rows.push({ project: p, y, fromCheckins: false }); y += ROW_HEIGHT; });
   }
 
   const totalHeight = Math.max(200, y);

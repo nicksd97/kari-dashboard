@@ -587,7 +587,7 @@ export async function fetchTimelineData(): Promise<TimelineEntry[]> {
       new Set(
         checkins
           .map((c) => String(c.project_assignment || "").split(/[\s-]/)[0])
-          .filter(Boolean)
+          .filter((n) => /^[0-9]{3}$/.test(n))
       )
     );
 
@@ -620,7 +620,7 @@ export async function fetchTimelineData(): Promise<TimelineEntry[]> {
       const empId = String(c.employee_id);
       const rawAssignment = String(c.project_assignment || "");
       const projNum = rawAssignment.split(/[\s-]/)[0];
-      if (!projNum) continue;
+      if (!projNum || !/^[0-9]{3}$/.test(projNum)) continue;
 
       if (!grouped.has(empId)) grouped.set(empId, new Map());
       const empMap = grouped.get(empId)!;
