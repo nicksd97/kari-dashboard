@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import type { Project, Lead, Checkin, ChecklistEntry, EmployeeScore, Deviation } from "./types";
+import type { Project, Lead, Checkin, ChecklistEntry, EmployeeScore, Deviation, TimelineEntry } from "./types";
 
 const COMPANY_ID = "a12dfbf0-a9d6-4786-95fe-6f1678d9d980";
 
@@ -556,6 +556,96 @@ export async function fetchLiveDeviations(): Promise<Deviation[]> {
       resolved_at: d.resolved_at ? String(d.resolved_at) : undefined,
       created_at: String(d.created_at || ""),
     })) as Deviation[];
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchTimelineData(): Promise<TimelineEntry[]> {
+  try {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
+    const monthStart = `${y}-${m}-01`;
+    const monthEnd = `${y}-${m}-${String(lastDay).padStart(2, "0")}`;
+
+    // Fetch all checkins for the current month that have been responded to
+    const { data: checkins, error: ciError } = await supabase
+      .from("checkins")
+      .select("employee_id, project_assignment, checkin_date")
+      .eq("company_id", COMPANY_ID)
+      .eq("status", "responded")
+      .gte("checkin_date", monthStart)
+      .lte("checkin_date", monthEnd);
+
+    if (ciError || !checkins || checkins.length === 0) return [];
+
+    // Get unique employee IDs and project numbers
+    const employeeIds = Array.from(new Set(checkins.map((c) => String(c.employee_id))));
+    const projectNumbers = Array.from(
+      new Set(
+        checkins
+          .map((c) => String(c.project_assignment || "").split(/[\s-]/)[0])
+          .filter(Boolean)
+      )
+    );
+
+    // Fetch employee names
+    const { data: employees } = await supabase
+      .from("employees")
+      .select("id, name")
+      .in("id", employeeIds);
+
+    const empNames = new Map<string, string>();
+    for (const e of employees || []) {
+      empNames.set(String(e.id), String(e.name).split(" ")[0]);
+    }
+
+    // Fetch project names
+    const { data: projects } = await supabase
+      .from("projects")
+      .select("project_number, name")
+      .eq("company_id", COMPANY_ID)
+      .in("project_number", projectNumbers);
+
+    const projNames = new Map<string, string>();
+    for (const p of projects || []) {
+      projNames.set(String(p.project_number), String(p.name));
+    }
+
+    // Group: employee_id → project_number → dates[]
+    const grouped = new Map<string, Map<string, string[]>>();
+    for (const c of checkins) {
+      const empId = String(c.employee_id);
+      const rawAssignment = String(c.project_assignment || "");
+      const projNum = rawAssignment.split(/[\s-]/)[0];
+      if (!projNum) continue;
+
+      if (!grouped.has(empId)) grouped.set(empId, new Map());
+      const empMap = grouped.get(empId)!;
+      if (!empMap.has(projNum)) empMap.set(projNum, []);
+      empMap.get(projNum)!.push(String(c.checkin_date));
+    }
+
+    // Build TimelineEntry[]
+    const entries: TimelineEntry[] = [];
+    for (const [empId, projMap] of grouped) {
+      for (const [projNum, dates] of projMap) {
+        const sorted = dates.sort();
+        entries.push({
+          employeeId: empId,
+          employeeName: empNames.get(empId) || empId,
+          projectNumber: projNum,
+          projectName: projNames.get(projNum) || projNum,
+          dates: sorted,
+          startDate: sorted[0],
+          endDate: sorted[sorted.length - 1],
+        });
+      }
+    }
+
+    return entries;
   } catch {
     return [];
   }

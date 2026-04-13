@@ -6,18 +6,20 @@ import {
   fetchLiveChecklistEntries,
   fetchLiveScores,
   fetchLiveDeviations,
+  fetchTimelineData,
 } from "@/lib/data";
 import Dashboard from "./components/Dashboard";
 import { Skeleton } from "@/components/ui/skeleton";
 
 async function DashboardData() {
-  const [projects, leads, checkins, checklistEntries, scores, deviations] = await Promise.all([
+  const [projects, leads, checkins, checklistEntries, scores, deviations, timelineEntries] = await Promise.all([
     fetchLiveProjects(),
     fetchLiveLeads(),
     fetchLiveCheckins(),
     fetchLiveChecklistEntries(),
     fetchLiveScores(),
     fetchLiveDeviations(),
+    fetchTimelineData(),
   ]);
 
   return (
@@ -28,6 +30,7 @@ async function DashboardData() {
       initialChecklistEntries={checklistEntries}
       initialScores={scores}
       initialDeviations={deviations}
+      initialTimelineEntries={timelineEntries}
     />
   );
 }

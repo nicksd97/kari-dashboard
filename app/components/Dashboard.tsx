@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import type { Project, Lead, Checkin, ChecklistEntry, EmployeeScore, Deviation } from "@/lib/types";
+import type { Project, Lead, Checkin, ChecklistEntry, EmployeeScore, Deviation, TimelineEntry } from "@/lib/types";
 import {
   fetchLiveProjects,
   fetchLiveLeads,
@@ -38,6 +38,7 @@ interface DashboardProps {
   initialChecklistEntries: ChecklistEntry[];
   initialScores: EmployeeScore[];
   initialDeviations: Deviation[];
+  initialTimelineEntries: TimelineEntry[];
 }
 
 export default function Dashboard({
@@ -47,6 +48,7 @@ export default function Dashboard({
   initialChecklistEntries,
   initialScores,
   initialDeviations,
+  initialTimelineEntries,
 }: DashboardProps) {
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>(initialProjects);
@@ -55,6 +57,7 @@ export default function Dashboard({
   const [checklistEntries, setChecklistEntries] = useState<ChecklistEntry[]>(initialChecklistEntries);
   const [scores, setScores] = useState<EmployeeScore[]>(initialScores);
   const [deviations, setDeviations] = useState<Deviation[]>(initialDeviations);
+  const [timelineEntries] = useState<TimelineEntry[]>(initialTimelineEntries);
   const [source, setSource] = useState<Source>("live");
   const [tab, setTab] = useState<Tab>("timeline");
   const [refreshing, setRefreshing] = useState(false);
@@ -262,7 +265,7 @@ export default function Dashboard({
           <div className="flex-1">
             {tab === "timeline" ? (
               <>
-                <Timeline projects={projects} checkins={checkins} />
+                <Timeline projects={projects} checkins={checkins} timelineEntries={timelineEntries} />
                 <ProjectsList projects={projects} />
                 <DeviationsList deviations={deviations} />
               </>

@@ -135,6 +135,16 @@ export const LEAD_STATUS_COLORS: Record<string, string> = {
   lost: "#F5C4B3",
 };
 
+export interface TimelineEntry {
+  employeeId: string;
+  employeeName: string;
+  projectNumber: string;
+  projectName: string;
+  dates: string[];
+  startDate: string;
+  endDate: string;
+}
+
 export interface Deviation {
   id: string;
   project_number: string;

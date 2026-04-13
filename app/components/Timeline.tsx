@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { useGesture } from "@use-gesture/react";
-import type { Project, Checklist, Checkin } from "@/lib/types";
+import type { Project, Checklist, Checkin, TimelineEntry } from "@/lib/types";
 import {
   STATUS_COLORS_SOFT,
   STATUS_LABELS,
@@ -13,6 +13,16 @@ import {
 interface TimelineProps {
   projects: Project[];
   checkins?: Checkin[];
+  timelineEntries?: TimelineEntry[];
+}
+
+// A row in the timeline — either from check-in data or project assignment fallback
+interface TimelineRow {
+  project: Project;
+  y: number;
+  fromCheckins: boolean; // true = solid bar, false = semi-transparent (fallback)
+  checkinStartDate?: string; // override dates from check-in data
+  checkinEndDate?: string;
 }
 
 const EMPLOYEES = ["Roar", "Andrii", "Marci"];
@@ -141,7 +151,7 @@ function getChecklistForItem(stageKey: StageKey, itemIndex: number, checklists: 
 
 // --- Main component ---
 
-export default function Timeline({ projects, checkins }: TimelineProps) {
+export default function Timeline({ projects, checkins, timelineEntries }: TimelineProps) {
   const [hoveredProject, setHoveredProject] = useState<string | null>(null);
   const [popupPos, setPopupPos] = useState({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
@@ -183,8 +193,11 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
 
   // --- Timeline range ---
   const allProjectDates = datedProjects.flatMap((p) => [p.start_date!, p.estimated_end_date!]);
-  const earliestDate = allProjectDates.length > 0 ? allProjectDates.sort()[0] : today;
-  const latestDate = allProjectDates.length > 0 ? allProjectDates.sort().reverse()[0] : today;
+  // Include check-in dates in range calculation
+  const checkinDates = (timelineEntries || []).flatMap((e) => [e.startDate, e.endDate]);
+  const allDates = [...allProjectDates, ...checkinDates].filter(Boolean);
+  const earliestDate = allDates.length > 0 ? allDates.sort()[0] : today;
+  const latestDate = allDates.length > 0 ? allDates.sort().reverse()[0] : today;
 
   const startAnchor = earliestDate < today ? earliestDate : today;
   const rangeStartD = new Date(startAnchor);
@@ -232,32 +245,104 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
 
   const todayIdx = dayIndex(rangeStartStr, today);
 
-  // --- Group by employee ---
-  const grouped: Record<string, Project[]> = {};
-  for (const emp of EMPLOYEES) grouped[emp] = [];
-  grouped["Ikke tildelt"] = [];
-  for (const p of datedProjects) {
-    const key = p.assigned && EMPLOYEES.includes(p.assigned) ? p.assigned : "Ikke tildelt";
-    grouped[key].push(p);
+  // --- Group by employee using check-in data (primary) + project assignment (fallback) ---
+  const hasCheckinData = timelineEntries && timelineEntries.length > 0;
+
+  // Build a project lookup by project_number
+  const projectByNumber = new Map<string, Project>();
+  for (const p of safeProjects) projectByNumber.set(p.project_number, p);
+
+  // Build grouped rows: employee → TimelineRow[]
+  const groupedRows: Record<string, TimelineRow[]> = {};
+  const allEmployees = new Set<string>();
+
+  // Track which employee+project combos are covered by check-ins
+  const checkinCovered = new Set<string>(); // "employeeName|projectNumber"
+
+  if (hasCheckinData) {
+    for (const entry of timelineEntries) {
+      const emp = entry.employeeName;
+      allEmployees.add(emp);
+      if (!groupedRows[emp]) groupedRows[emp] = [];
+      checkinCovered.add(`${emp}|${entry.projectNumber}`);
+
+      // Find the matching project for full metadata (status, checklists, etc.)
+      const matchedProject = projectByNumber.get(entry.projectNumber);
+      const project: Project = matchedProject || {
+        project_number: entry.projectNumber,
+        name: entry.projectName,
+        status: "pagaende",
+        start_date: entry.startDate,
+        estimated_end_date: entry.endDate,
+      };
+
+      groupedRows[emp].push({
+        project,
+        y: 0,
+        fromCheckins: true,
+        checkinStartDate: entry.startDate,
+        checkinEndDate: entry.endDate,
+      });
+    }
   }
+
+  // Fallback: projects with assigned_to but no check-in data for that employee+project
+  for (const p of datedProjects) {
+    if (!p.assigned) continue;
+    const key = `${p.assigned}|${p.project_number}`;
+    if (checkinCovered.has(key)) continue;
+    allEmployees.add(p.assigned);
+    if (!groupedRows[p.assigned]) groupedRows[p.assigned] = [];
+    groupedRows[p.assigned].push({
+      project: p,
+      y: 0,
+      fromCheckins: false,
+    });
+  }
+
+  // Unassigned dated projects (no check-in, no assigned_to)
+  const unassignedDated = datedProjects.filter(
+    (p) => !p.assigned && !timelineEntries?.some((e) => e.projectNumber === p.project_number)
+  );
+  if (unassignedDated.length > 0) {
+    groupedRows["Ikke tildelt"] = unassignedDated.map((p) => ({
+      project: p,
+      y: 0,
+      fromCheckins: false,
+    }));
+    allEmployees.add("Ikke tildelt");
+  }
+
   const undated = safeProjects.filter((p) => !p.start_date || !p.estimated_end_date);
+
+  // Sort employees: known EMPLOYEES first, then others alphabetically, "Ikke tildelt" last
+  const sortedEmployees = Array.from(allEmployees).sort((a, b) => {
+    if (a === "Ikke tildelt") return 1;
+    if (b === "Ikke tildelt") return -1;
+    const aIdx = EMPLOYEES.indexOf(a);
+    const bIdx = EMPLOYEES.indexOf(b);
+    if (aIdx >= 0 && bIdx >= 0) return aIdx - bIdx;
+    if (aIdx >= 0) return -1;
+    if (bIdx >= 0) return 1;
+    return a.localeCompare(b, "nb-NO");
+  });
 
   // --- Layout rows ---
   let y = 0;
-  const rows: { project: Project; y: number }[] = [];
+  const rows: TimelineRow[] = [];
   const headers: { label: string; color: string; y: number }[] = [];
 
-  for (const emp of [...EMPLOYEES, "Ikke tildelt"]) {
-    const group = grouped[emp];
+  for (const emp of sortedEmployees) {
+    const group = groupedRows[emp] || [];
     if (group.length === 0) continue;
     headers.push({ label: emp, color: EMPLOYEE_COLORS[emp] || "#999", y });
     y += EMP_HEADER;
-    group.forEach((p) => { rows.push({ project: p, y }); y += ROW_HEIGHT; });
+    group.forEach((row) => { row.y = y; rows.push(row); y += ROW_HEIGHT; });
   }
   if (undated.length > 0) {
     headers.push({ label: "Uten dato", color: "#999", y });
     y += EMP_HEADER;
-    undated.forEach((p) => { rows.push({ project: p, y }); y += ROW_HEIGHT; });
+    undated.forEach((p) => { rows.push({ project: p, y, fromCheckins: false }); y += ROW_HEIGHT; });
   }
 
   const totalHeight = Math.max(200, y);
@@ -380,11 +465,11 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
                   <span className="text-[12px] font-semibold text-foreground">{h.label}</span>
                 </div>
               ))}
-              {rows.map((row) => {
+              {rows.map((row, rowIdx) => {
                 const p = row.project;
                 const isFerdig = p.status === "ferdig";
                 return (
-                  <div key={`lbl-${p.project_number}`} className="absolute flex items-center pl-5 pr-3 bg-card" style={{ top: row.y, width: LEFT_COL, height: ROW_HEIGHT, borderBottom: "1px solid var(--border)" }}>
+                  <div key={`lbl-${p.project_number}-${rowIdx}`} className="absolute flex items-center pl-5 pr-3 bg-card" style={{ top: row.y, width: LEFT_COL, height: ROW_HEIGHT, borderBottom: "1px solid var(--border)", opacity: row.fromCheckins ? 1 : 0.6 }}>
                     <Link href={`/project/${p.project_number}`} className="truncate text-[12px] hover:underline flex items-center h-full w-full">
                       <span className="text-muted-foreground/70 mr-1">#{p.project_number}</span>
                       <span className={isFerdig ? "text-muted-foreground/70 line-through" : "text-foreground"}>{p.name}</span>
@@ -477,16 +562,20 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
                 ))}
 
                 {/* Row borders */}
-                {rows.map((row) => (
-                  <div key={`rb-${row.project.project_number}`} className="absolute pointer-events-none bg-border" style={{ top: row.y + ROW_HEIGHT - 1, left: 0, width: gridWidth, height: 1 }} />
+                {rows.map((row, rowIdx) => (
+                  <div key={`rb-${row.project.project_number}-${rowIdx}`} className="absolute pointer-events-none bg-border" style={{ top: row.y + ROW_HEIGHT - 1, left: 0, width: gridWidth, height: 1 }} />
                 ))}
 
                 {/* Project bars */}
-                {rows.map((row) => {
+                {rows.map((row, rowIdx) => {
                   const p = row.project;
-                  if (!p.start_date || !p.estimated_end_date) {
+                  // Use check-in dates when available, fall back to project dates
+                  const barStart = row.checkinStartDate || p.start_date;
+                  const barEnd = row.checkinEndDate || p.estimated_end_date;
+
+                  if (!barStart || !barEnd) {
                     return (
-                      <div key={p.project_number} className="absolute flex items-center pl-2" style={{ top: row.y, left: 0, height: ROW_HEIGHT }}>
+                      <div key={`${p.project_number}-${rowIdx}`} className="absolute flex items-center pl-2" style={{ top: row.y, left: 0, height: ROW_HEIGHT }}>
                         <span className="rounded px-2 py-0.5 text-[10px] font-medium" style={{ backgroundColor: STATUS_COLORS_SOFT[p.status] || "#eee", color: "#555" }}>
                           {STATUS_LABELS[p.status] || p.status}
                         </span>
@@ -494,20 +583,21 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
                     );
                   }
 
-                  const startI = dayIndex(rangeStartStr, p.start_date);
-                  const endI = dayIndex(rangeStartStr, p.estimated_end_date);
+                  const startI = dayIndex(rangeStartStr, barStart);
+                  const endI = dayIndex(rangeStartStr, barEnd);
                   const barDays = Math.max(1, endI - startI + 1);
                   const barLeft = startI * zoom;
                   const barWidth = barDays * zoom;
                   const isHovered = hoveredProject === p.project_number;
                   const bs = getBarStyle(p, today);
                   const empColor = EMPLOYEE_COLORS[p.assigned || ""] || null;
+                  const isFallback = !row.fromCheckins;
 
                   return (
                     <div
-                      key={p.project_number}
+                      key={`${p.project_number}-${rowIdx}`}
                       className="absolute"
-                      style={{ top: row.y, left: barLeft, width: barWidth, height: ROW_HEIGHT }}
+                      style={{ top: row.y, left: barLeft, width: barWidth, height: ROW_HEIGHT, opacity: isFallback ? 0.5 : 1 }}
                     >
                       <div
                         className="absolute flex items-center cursor-pointer transition-shadow"
@@ -517,7 +607,7 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
                           height: BAR_HEIGHT,
                           top: (ROW_HEIGHT - BAR_HEIGHT) / 2,
                           backgroundColor: bs.bg,
-                          border: isHovered ? "1px solid rgba(0,0,0,0.3)" : bs.border,
+                          border: isHovered ? "1px solid rgba(0,0,0,0.3)" : isFallback ? "1px dashed #B0B0B0" : bs.border,
                           borderRadius: 6,
                           boxShadow: isHovered ? "0 2px 6px rgba(0,0,0,0.12)" : "none",
                         }}
@@ -525,7 +615,6 @@ export default function Timeline({ projects, checkins }: TimelineProps) {
                         onMouseMove={handleBarMouseMove}
                         onMouseLeave={handleBarLeave}
                         onClick={(e) => {
-                          // Allow touch devices to view tooltip easily on tap
                           if (window.innerWidth < 1024) {
                             handleBarEnter(p.project_number, e);
                             setTimeout(() => handleBarLeave(), 3000);
