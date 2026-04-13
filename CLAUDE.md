@@ -2,6 +2,8 @@
 
 # Kari Dashboard — Project Rules
 
+*Last updated: 2026-04-13*
+
 ## Auto Plan-and-Execute Workflow
 
 Every task follows this sequence. No exceptions.
