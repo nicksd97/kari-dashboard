@@ -302,7 +302,7 @@ export async function fetchLiveCheckins(): Promise<Checkin[]> {
     // Fetch today's checkins
     const { data: checkins, error: ciError } = await supabase
       .from("checkins")
-      .select("*")
+      .select("employee_id, status, responded_at, project_assignment, planned_tasks, raw_response, estimated_completion")
       .eq("company_id", COMPANY_ID)
       .eq("checkin_date", today);
 
@@ -314,10 +314,15 @@ export async function fetchLiveCheckins(): Promise<Checkin[]> {
       checkinByEmpId.set(String(c.employee_id), c as Record<string, unknown>);
     }
 
-    // Fetch project names for assignments
-    const assignmentNums = checkinRows
-      .map((c) => c.project_assignment)
-      .filter(Boolean);
+    // Extract leading project number from assignment string ("767, 803" → "767", "810 - Nilsbu" → "810")
+    const extractProjNum = (pa: unknown): string | undefined => {
+      const m = String(pa || "").match(/^(\d+)/);
+      return m ? m[1] : undefined;
+    };
+    const assignmentNums = Array.from(new Set(
+      checkinRows.map((c) => extractProjNum(c.project_assignment)).filter((n): n is string => !!n)
+    ));
+    
     let projectsByNum = new Map<string, string>();
     if (assignmentNums.length > 0) {
       const { data: projects } = await supabase
@@ -336,13 +341,13 @@ export async function fetchLiveCheckins(): Promise<Checkin[]> {
     return employees.map((emp: Record<string, unknown>) => {
       const firstName = String(emp.name || "").split(" ")[0];
       const c = checkinByEmpId.get(String(emp.id));
-      if (c && c.responded_at) {
-        const projNum = c.project_assignment ? String(c.project_assignment) : undefined;
+      if (c && c.status === "responded") {
+        const projNum = extractProjNum(c.project_assignment);
         return {
           employee: firstName,
           status: "checked_in" as const,
           summary: c.planned_tasks ? String(c.planned_tasks) : undefined,
-          time: new Date(String(c.responded_at)).toLocaleTimeString("nb-NO", { hour: "2-digit", minute: "2-digit" }),
+          time: c.responded_at ? new Date(String(c.responded_at)).toLocaleTimeString("nb-NO", { hour: "2-digit", minute: "2-digit" }) : undefined,
           projectNumber: projNum,
           projectName: projNum ? projectsByNum.get(projNum) : undefined,
           rawResponse: c.raw_response ? String(c.raw_response) : undefined,
