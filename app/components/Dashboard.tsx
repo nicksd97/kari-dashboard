@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import type { Project, Lead, Checkin, ChecklistEntry, EmployeeScore, Deviation, TimelineEntry } from "@/lib/types";
+import type { Project, Lead, Checkin, ChecklistEntry, EmployeeScore, Deviation, TimelineEntry, MessageFeedEntry } from "@/lib/types";
 import {
   fetchLiveProjects,
   fetchLiveLeads,
@@ -10,6 +10,7 @@ import {
   fetchLiveChecklistEntries,
   fetchLiveScores,
   fetchLiveDeviations,
+  fetchLiveMessageFeed,
   getDemoData,
   getDemoScores,
 } from "@/lib/data";
@@ -19,6 +20,7 @@ import LeadPipeline from "./LeadPipeline";
 import ProjectsList from "./ProjectsList";
 import DeviationsList from "./DeviationsList";
 import Sidebar from "./Sidebar";
+import MessageFeed from "./MessageFeed";
 import {
   CommandDialog,
   CommandEmpty,
@@ -28,7 +30,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 
-type Tab = "timeline" | "leads";
+type Tab = "timeline" | "leads" | "messages";
 type Source = "live" | "demo";
 
 interface DashboardProps {
@@ -39,6 +41,7 @@ interface DashboardProps {
   initialScores: EmployeeScore[];
   initialDeviations: Deviation[];
   initialTimelineEntries: TimelineEntry[];
+  initialMessageFeed: MessageFeedEntry[];
 }
 
 export default function Dashboard({
@@ -49,6 +52,7 @@ export default function Dashboard({
   initialScores,
   initialDeviations,
   initialTimelineEntries,
+  initialMessageFeed,
 }: DashboardProps) {
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>(initialProjects);
@@ -58,6 +62,7 @@ export default function Dashboard({
   const [scores, setScores] = useState<EmployeeScore[]>(initialScores);
   const [deviations, setDeviations] = useState<Deviation[]>(initialDeviations);
   const [timelineEntries] = useState<TimelineEntry[]>(initialTimelineEntries);
+  const [messageFeed, setMessageFeed] = useState<MessageFeedEntry[]>(initialMessageFeed);
   const [source, setSource] = useState<Source>("live");
   const [tab, setTab] = useState<Tab>("timeline");
   const [refreshing, setRefreshing] = useState(false);
@@ -78,13 +83,14 @@ export default function Dashboard({
 
   const loadLive = useCallback(async () => {
     try {
-      const [liveProjects, liveLeads, liveCheckins, liveCl, liveScores, liveDev] = await Promise.all([
+      const [liveProjects, liveLeads, liveCheckins, liveCl, liveScores, liveDev, liveMsgs] = await Promise.all([
         fetchLiveProjects().catch(() => []),
         fetchLiveLeads().catch(() => []),
         fetchLiveCheckins().catch(() => []),
         fetchLiveChecklistEntries().catch(() => []),
         fetchLiveScores().catch(() => []),
         fetchLiveDeviations().catch(() => []),
+        fetchLiveMessageFeed().catch(() => []),
       ]);
       const p = Array.isArray(liveProjects) ? liveProjects : [];
       const l = Array.isArray(liveLeads) ? liveLeads : [];
@@ -92,12 +98,14 @@ export default function Dashboard({
       const cl = Array.isArray(liveCl) ? liveCl : [];
       const sc = Array.isArray(liveScores) ? liveScores : [];
       const dv = Array.isArray(liveDev) ? liveDev : [];
+      const msgs = Array.isArray(liveMsgs) ? liveMsgs : [];
       setProjects(p);
       setLeads(l);
       setCheckins(ci);
       setChecklistEntries(cl);
       setScores(sc);
       setDeviations(dv);
+      setMessageFeed(msgs);
       return p.length > 0 || l.length > 0;
     } catch {
       setProjects([]);
@@ -106,6 +114,7 @@ export default function Dashboard({
       setChecklistEntries([]);
       setScores([]);
       setDeviations([]);
+      setMessageFeed([]);
       return false;
     }
   }, []);
@@ -118,6 +127,7 @@ export default function Dashboard({
     setChecklistEntries(demo.checklistEntries);
     setScores(getDemoScores());
     setDeviations(demo.deviations);
+    setMessageFeed(demo.messageFeed || []);
   }, []);
 
   const handleToggle = useCallback(async () => {
@@ -259,6 +269,16 @@ export default function Dashboard({
                 <span className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-foreground" />
               )}
             </button>
+            <button
+              onClick={() => setTab("messages")}
+              className={`relative pb-3 text-[14px] font-medium transition-colors min-h-[44px] cursor-pointer ${tab === "messages" ? "text-foreground" : "text-muted-foreground/70"}`}
+              style={{ letterSpacing: "0.01em" }}
+            >
+              Meldinger
+              {tab === "messages" && (
+                <span className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-foreground" />
+              )}
+            </button>
           </div>
 
           {/* Content */}
@@ -269,8 +289,10 @@ export default function Dashboard({
                 <ProjectsList projects={projects} />
                 <DeviationsList deviations={deviations} />
               </>
-            ) : (
+            ) : tab === "leads" ? (
               <LeadPipeline leads={leads} />
+            ) : (
+              <MessageFeed messages={messageFeed} />
             )}
           </div>
 

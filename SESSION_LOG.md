@@ -6,3 +6,4 @@
 - 2026-04-09: Fixed project data in Supabase — reassigned 767 to Andrii (was Marci), set null end dates to today on 4 active projects. Set customer_name "Nora Samdal" on 767, deleted duplicate project 10023.
 - 2026-04-10: Added Avvik (deviations) section to dashboard front page below ProjectsList. New DeviationsList component with open/resolved groups, severity badges, deadline countdown, expandable rows. New fetchLiveDeviations() in lib/data.ts and Deviation type in lib/types.ts.
 - 2026-04-13: Fixed checkin status bug in lib/data.ts (fetchLiveCheckins) by querying explicit columns and properly extracting project assignment numbers.
+- 2026-04-13: Added "Meldinger" tab to Dashboard to show a live chat-style chronological feed of employee check-in messages. Added `MessageFeed` component and updated types/data fetching.

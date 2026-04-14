@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import type { Project, Lead, Checkin, ChecklistEntry, EmployeeScore, Deviation, TimelineEntry } from "./types";
+import type { Project, Lead, Checkin, ChecklistEntry, EmployeeScore, Deviation, TimelineEntry, MessageFeedEntry } from "./types";
 
 const COMPANY_ID = "a12dfbf0-a9d6-4786-95fe-6f1678d9d980";
 
@@ -167,6 +167,12 @@ const DEMO_DEVIATIONS: Deviation[] = [
   { id: "demo-3", project_number: "767", description: "Betong tørket for fort", location: "Fundament", severity: "low", status: "resolved", reported_by_name: "Nick Davidson", responsible_name: "Marci Marschall", resolved_by_name: "Marci Marschall", resolved_at: "2026-04-03T15:00:00+00:00", created_at: "2026-04-01T13:00:00+00:00" },
 ];
 
+const DEMO_MESSAGE_FEED: MessageFeedEntry[] = [
+  { id: "demo-msg-1", employee_name: "Roar", project_number: "802", project_name: "Vika Hustad Isolasjon", planned_tasks: "Vika Hustad - Isolasjon", raw_response: "Jobber med isolasjon i dag, ferdig med vegger, starter tak etter lunsj", responded_at: "2026-04-13T07:14:00+00:00" },
+  { id: "demo-msg-2", employee_name: "Andrii", project_number: "767", project_name: "Stavnevegen 31", planned_tasks: "Stavnevegen 31", raw_response: "Fortsetter med kjøkkenmontering, venter på benkeplate", responded_at: "2026-04-13T06:45:00+00:00" },
+  { id: "demo-msg-3", employee_name: "Marci", project_number: "810", project_name: "Byåsen Betong", planned_tasks: "Byåsen Betong - Ferdigstillelse", raw_response: "Rydder byggeplass og tar siste sjekk før overlevering", responded_at: "2026-04-12T06:30:00+00:00" },
+];
+
 export function getDemoData() {
   return {
     projects: DEMO_PROJECTS,
@@ -174,6 +180,7 @@ export function getDemoData() {
     checkins: DEMO_CHECKINS,
     checklistEntries: DEMO_CHECKLIST_ENTRIES,
     deviations: DEMO_DEVIATIONS,
+    messageFeed: DEMO_MESSAGE_FEED,
   };
 }
 
@@ -667,4 +674,70 @@ function countWeekdays(startStr: string, endStr: string): number {
     cur.setDate(cur.getDate() + 1);
   }
   return count;
+}
+
+export async function fetchLiveMessageFeed(): Promise<MessageFeedEntry[]> {
+  try {
+    const { data: checkins, error: ciError } = await supabase
+      .from("checkins")
+      .select("id, employee_id, project_assignment, planned_tasks, raw_response, responded_at")
+      .eq("company_id", COMPANY_ID)
+      .eq("status", "responded")
+      .not("responded_at", "is", null)
+      .order("responded_at", { ascending: false })
+      .limit(50);
+
+    if (ciError || !checkins || checkins.length === 0) return [];
+
+    // Get unique employee IDs
+    const empIds = Array.from(new Set(checkins.map((c) => String(c.employee_id))));
+    const { data: employees } = await supabase
+      .from("employees")
+      .select("id, name")
+      .in("id", empIds);
+
+    const empNames = new Map<string, string>();
+    for (const e of employees || []) {
+      empNames.set(String(e.id), String(e.name).split(" ")[0]);
+    }
+
+    // Extract leading project number from assignment string
+    const extractProjNum = (pa: unknown): string | undefined => {
+      const m = String(pa || "").match(/^(\d+)/);
+      return m ? m[1] : undefined;
+    };
+
+    const assignmentNums = Array.from(
+      new Set(checkins.map((c) => extractProjNum(c.project_assignment)).filter((n): n is string => !!n))
+    );
+
+    const projNames = new Map<string, string>();
+    if (assignmentNums.length > 0) {
+      const { data: projects } = await supabase
+        .from("projects")
+        .select("project_number, name")
+        .eq("company_id", COMPANY_ID)
+        .in("project_number", assignmentNums);
+      if (projects) {
+        for (const p of projects) {
+          projNames.set(String(p.project_number), String(p.name));
+        }
+      }
+    }
+
+    return checkins.map((c: Record<string, unknown>) => {
+      const projNum = extractProjNum(c.project_assignment);
+      return {
+        id: String(c.id || ""),
+        employee_name: empNames.get(String(c.employee_id)) || "Ukjent",
+        project_number: projNum,
+        project_name: projNum ? projNames.get(projNum) : undefined,
+        planned_tasks: c.planned_tasks ? String(c.planned_tasks) : undefined,
+        raw_response: c.raw_response ? String(c.raw_response) : undefined,
+        responded_at: String(c.responded_at || ""),
+      };
+    });
+  } catch {
+    return [];
+  }
 }

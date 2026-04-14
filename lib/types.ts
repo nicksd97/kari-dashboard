@@ -145,6 +145,16 @@ export interface TimelineEntry {
   endDate: string;
 }
 
+export interface MessageFeedEntry {
+  id: string;
+  employee_name: string;
+  project_number?: string;
+  project_name?: string;
+  planned_tasks?: string;
+  raw_response?: string;
+  responded_at: string;
+}
+
 export interface Deviation {
   id: string;
   project_number: string;
