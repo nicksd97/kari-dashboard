@@ -7,3 +7,4 @@
 - 2026-04-10: Added Avvik (deviations) section to dashboard front page below ProjectsList. New DeviationsList component with open/resolved groups, severity badges, deadline countdown, expandable rows. New fetchLiveDeviations() in lib/data.ts and Deviation type in lib/types.ts.
 - 2026-04-13: Fixed checkin status bug in lib/data.ts (fetchLiveCheckins) by querying explicit columns and properly extracting project assignment numbers.
 - 2026-04-13: Added "Meldinger" tab to Dashboard to show a live chat-style chronological feed of employee check-in messages. Added `MessageFeed` component and updated types/data fetching.
+- 2026-04-13: Expanded "Meldinger" tab to show a unified feed of check-ins, deviations, and checklists with distinct icons, Norwegian labels, and combined Supabase queries.

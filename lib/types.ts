@@ -147,12 +147,14 @@ export interface TimelineEntry {
 
 export interface MessageFeedEntry {
   id: string;
+  type: "checkin" | "deviation" | "checklist";
+  timestamp: string;
   employee_name: string;
   project_number?: string;
   project_name?: string;
-  planned_tasks?: string;
-  raw_response?: string;
-  responded_at: string;
+  description: string;
+  extra_info?: string;
+  status?: string;
 }
 
 export interface Deviation {

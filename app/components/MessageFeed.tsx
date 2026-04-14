@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { MessageFeedEntry } from "@/lib/types";
 import { EMPLOYEE_COLORS } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
+import { CheckCircle2, AlertTriangle, ClipboardCheck } from "lucide-react";
 
 interface MessageFeedProps {
   messages: MessageFeedEntry[];
@@ -42,10 +43,36 @@ export default function MessageFeed({ messages }: MessageFeedProps) {
     }
   };
 
+  const getIcon = (type: string) => {
+    switch (type) {
+      case "checkin":
+        return <CheckCircle2 className="w-5 h-5 text-green-500" />;
+      case "deviation":
+        return <AlertTriangle className="w-5 h-5 text-red-500" />;
+      case "checklist":
+        return <ClipboardCheck className="w-5 h-5 text-blue-500" />;
+      default:
+        return null;
+    }
+  };
+
+  const getTypeLabel = (type: string) => {
+    switch (type) {
+      case "checkin":
+        return "Sjekk-inn";
+      case "deviation":
+        return "Avvik";
+      case "checklist":
+        return "Sjekkliste";
+      default:
+        return type;
+    }
+  };
+
   if (messages.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-48 rounded-xl border border-dashed border-border bg-muted/20 text-muted-foreground">
-        <p>Ingen meldinger funnet enda.</p>
+        <p>Ingen hendelser funnet enda.</p>
       </div>
     );
   }
@@ -69,7 +96,7 @@ export default function MessageFeed({ messages }: MessageFeedProps) {
             >
               <div
                 className="w-2.5 h-2.5 rounded-full"
-                style={{ backgroundColor: color }}
+                style={name !== "System" ? { backgroundColor: color } : { backgroundColor: "#94a3b8" }}
               />
               {name}
             </button>
@@ -94,49 +121,68 @@ export default function MessageFeed({ messages }: MessageFeedProps) {
             <Card key={msg.id} className="overflow-hidden">
               <CardContent className="p-0">
                 <div className="flex p-4 gap-4">
-                  {/* Avatar */}
-                  <div
-                    className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shadow-sm mt-1"
-                    style={{ backgroundColor: color }}
-                  >
-                    {msg.employee_name.charAt(0)}
+                  {/* Icon / Avatar column */}
+                  <div className="flex flex-col items-center gap-2 mt-1 shrink-0 w-10">
+                    {getIcon(msg.type)}
+                    {msg.employee_name !== "System" && (
+                      <div
+                        className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-white shadow-sm text-xs"
+                        style={{ backgroundColor: color }}
+                        title={msg.employee_name}
+                      >
+                        {msg.employee_name.charAt(0)}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex-1 min-w-0">
                     {/* Header */}
                     <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 mb-1">
-                      <h3 className="font-semibold text-foreground text-[15px]">
-                        {msg.employee_name}
-                      </h3>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                          {getTypeLabel(msg.type)}
+                        </span>
+                        <h3 className="font-semibold text-foreground text-[15px]">
+                          {msg.employee_name !== "System" ? msg.employee_name : "System"}
+                        </h3>
+                      </div>
                       <span className="text-xs text-muted-foreground/70 font-medium">
-                        {formatDate(msg.responded_at)}
+                        {formatDate(msg.timestamp)}
                       </span>
                     </div>
 
-                    {/* Project/Tasks context */}
-                    {(msg.project_number || msg.planned_tasks) && (
-                      <div className="mb-3 flex flex-col gap-1">
-                        {msg.project_number && (
-                          <div className="text-xs font-medium bg-muted/60 text-muted-foreground inline-flex items-center rounded-md px-2 py-0.5 w-fit">
-                            <span className="mr-1 opacity-70">Prosjekt:</span>
-                            <span className="text-foreground">
-                              #{msg.project_number} {msg.project_name || ""}
-                            </span>
-                          </div>
-                        )}
-                        {msg.planned_tasks && (
-                          <div className="text-[13px] text-muted-foreground">
-                            <span className="font-medium mr-1">Planlagt:</span>
-                            {msg.planned_tasks}
-                          </div>
-                        )}
+                    {/* Project/Context */}
+                    {msg.project_number && (
+                      <div className="mb-3">
+                        <div className="text-xs font-medium bg-muted/60 text-muted-foreground inline-flex items-center rounded-md px-2 py-0.5 w-fit">
+                          <span className="mr-1 opacity-70">Prosjekt:</span>
+                          <span className="text-foreground">
+                            #{msg.project_number} {msg.project_name || ""}
+                          </span>
+                        </div>
                       </div>
                     )}
 
-                    {/* The message / raw response */}
-                    {msg.raw_response && (
+                    {/* The message / description */}
+                    {msg.description && (
                       <div className="bg-muted/30 rounded-lg p-3 border border-border/50 text-[14px] text-foreground/90 whitespace-pre-wrap leading-relaxed">
-                        {msg.raw_response}
+                        {msg.description}
+                      </div>
+                    )}
+
+                    {/* Extra Info / Status */}
+                    {(msg.extra_info || msg.status) && (
+                      <div className="mt-2 flex flex-wrap gap-2 text-[12px]">
+                        {msg.status && (
+                          <span className="px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground font-medium">
+                            Status: {msg.status}
+                          </span>
+                        )}
+                        {msg.extra_info && (
+                          <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                            {msg.extra_info}
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>
