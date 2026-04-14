@@ -168,9 +168,11 @@ const DEMO_DEVIATIONS: Deviation[] = [
 ];
 
 const DEMO_MESSAGE_FEED: MessageFeedEntry[] = [
-  { id: "demo-msg-1", employee_name: "Roar", project_number: "802", project_name: "Vika Hustad Isolasjon", planned_tasks: "Vika Hustad - Isolasjon", raw_response: "Jobber med isolasjon i dag, ferdig med vegger, starter tak etter lunsj", responded_at: "2026-04-13T07:14:00+00:00" },
-  { id: "demo-msg-2", employee_name: "Andrii", project_number: "767", project_name: "Stavnevegen 31", planned_tasks: "Stavnevegen 31", raw_response: "Fortsetter med kjøkkenmontering, venter på benkeplate", responded_at: "2026-04-13T06:45:00+00:00" },
-  { id: "demo-msg-3", employee_name: "Marci", project_number: "810", project_name: "Byåsen Betong", planned_tasks: "Byåsen Betong - Ferdigstillelse", raw_response: "Rydder byggeplass og tar siste sjekk før overlevering", responded_at: "2026-04-12T06:30:00+00:00" },
+  { id: "demo-msg-1", type: "checkin", employee_name: "Roar", project_number: "802", project_name: "Vika Hustad Isolasjon", extra_info: "Planlagt: Vika Hustad - Isolasjon", description: "Jobber med isolasjon i dag, ferdig med vegger, starter tak etter lunsj", timestamp: "2026-04-13T07:14:00+00:00" },
+  { id: "demo-dev-1", type: "deviation", employee_name: "Nick", project_number: "767", project_name: "Stavnevegen 31", description: "Ikke vibrert ved utstøping (Grunnmur)", extra_info: "Ansvarlig: Marci Marschall", status: "assigned", timestamp: "2026-04-12T10:00:00+00:00" },
+  { id: "demo-cl-1", type: "checklist", employee_name: "System", project_number: "815", project_name: "Jan Erik Peis", description: "Sjekkliste: Ferdigstillelse", status: "Fullført", extra_info: "12/12 punkter", timestamp: "2026-04-11T14:30:00+00:00" },
+  { id: "demo-msg-2", type: "checkin", employee_name: "Andrii", project_number: "767", project_name: "Stavnevegen 31", extra_info: "Planlagt: Stavnevegen 31", description: "Fortsetter med kjøkkenmontering, venter på benkeplate", timestamp: "2026-04-10T06:45:00+00:00" },
+  { id: "demo-msg-3", type: "checkin", employee_name: "Marci", project_number: "810", project_name: "Byåsen Betong", extra_info: "Planlagt: Byåsen Betong - Ferdigstillelse", description: "Rydder byggeplass og tar siste sjekk før overlevering", timestamp: "2026-04-12T06:30:00+00:00" },
 ];
 
 export function getDemoData() {
@@ -678,19 +680,33 @@ function countWeekdays(startStr: string, endStr: string): number {
 
 export async function fetchLiveMessageFeed(): Promise<MessageFeedEntry[]> {
   try {
-    const { data: checkins, error: ciError } = await supabase
-      .from("checkins")
-      .select("id, employee_id, project_assignment, planned_tasks, raw_response, responded_at")
-      .eq("company_id", COMPANY_ID)
-      .eq("status", "responded")
-      .not("responded_at", "is", null)
-      .order("responded_at", { ascending: false })
-      .limit(50);
+    const [{ data: checkins }, { data: deviations }, { data: checklists }] = await Promise.all([
+      supabase
+        .from("checkins")
+        .select("id, employee_id, project_assignment, planned_tasks, raw_response, responded_at")
+        .eq("company_id", COMPANY_ID)
+        .eq("status", "responded")
+        .not("responded_at", "is", null)
+        .order("responded_at", { ascending: false })
+        .limit(30),
+      supabase
+        .from("deviations")
+        .select("id, project_number, description, location, severity, status, reported_by_name, responsible_name, created_at")
+        .eq("company_id", COMPANY_ID)
+        .order("created_at", { ascending: false })
+        .limit(30),
+      supabase
+        .from("checklists")
+        .select("id, template, project_number, project_name, status, completed_at, created_at, done, total")
+        .eq("company_id", COMPANY_ID)
+        .order("created_at", { ascending: false })
+        .limit(30)
+    ]);
 
-    if (ciError || !checkins || checkins.length === 0) return [];
+    const entries: MessageFeedEntry[] = [];
 
     // Get unique employee IDs
-    const empIds = Array.from(new Set(checkins.map((c) => String(c.employee_id))));
+    const empIds = Array.from(new Set((checkins || []).map((c) => String(c.employee_id))));
     const { data: employees } = await supabase
       .from("employees")
       .select("id, name")
@@ -708,7 +724,7 @@ export async function fetchLiveMessageFeed(): Promise<MessageFeedEntry[]> {
     };
 
     const assignmentNums = Array.from(
-      new Set(checkins.map((c) => extractProjNum(c.project_assignment)).filter((n): n is string => !!n))
+      new Set((checkins || []).map((c) => extractProjNum(c.project_assignment)).filter((n): n is string => !!n))
     );
 
     const projNames = new Map<string, string>();
@@ -725,18 +741,55 @@ export async function fetchLiveMessageFeed(): Promise<MessageFeedEntry[]> {
       }
     }
 
-    return checkins.map((c: Record<string, unknown>) => {
+    // Process checkins
+    for (const c of checkins || []) {
       const projNum = extractProjNum(c.project_assignment);
-      return {
-        id: String(c.id || ""),
+      entries.push({
+        id: `ci-${c.id}`,
+        type: "checkin",
+        timestamp: String(c.responded_at || ""),
         employee_name: empNames.get(String(c.employee_id)) || "Ukjent",
         project_number: projNum,
         project_name: projNum ? projNames.get(projNum) : undefined,
-        planned_tasks: c.planned_tasks ? String(c.planned_tasks) : undefined,
-        raw_response: c.raw_response ? String(c.raw_response) : undefined,
-        responded_at: String(c.responded_at || ""),
-      };
-    });
+        description: c.raw_response ? String(c.raw_response) : "Sjekket inn",
+        extra_info: c.planned_tasks ? `Planlagt: ${c.planned_tasks}` : undefined,
+      });
+    }
+
+    // Process deviations
+    for (const d of deviations || []) {
+      entries.push({
+        id: `dev-${d.id}`,
+        type: "deviation",
+        timestamp: String(d.created_at || ""),
+        employee_name: d.reported_by_name ? String(d.reported_by_name).split(" ")[0] : "Ukjent",
+        project_number: String(d.project_number || ""),
+        project_name: undefined,
+        description: `${d.description}${d.location ? ` (${d.location})` : ""}`,
+        status: String(d.status || ""),
+        extra_info: d.responsible_name ? `Ansvarlig: ${d.responsible_name}` : undefined,
+      });
+    }
+
+    // Process checklists
+    for (const cl of checklists || []) {
+      const isCompleted = cl.completed_at ? true : false;
+      entries.push({
+        id: `cl-${cl.id || Math.random()}`,
+        type: "checklist",
+        timestamp: String(cl.created_at || ""),
+        employee_name: "System",
+        project_number: String(cl.project_number || ""),
+        project_name: cl.project_name ? String(cl.project_name) : undefined,
+        description: `Sjekkliste: ${cl.template}`,
+        status: isCompleted ? "Fullført" : "Sendt",
+        extra_info: cl.done != null && cl.total != null ? `${cl.done}/${cl.total} punkter` : undefined,
+      });
+    }
+
+    entries.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    return entries.slice(0, 50);
   } catch {
     return [];
   }
