@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { MessageFeedEntry } from "@/lib/types";
 import { EMPLOYEE_COLORS } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
-import { CheckCircle2, AlertTriangle, ClipboardCheck } from "lucide-react";
+import { CheckCircle2, AlertTriangle, ClipboardCheck, Clock } from "lucide-react";
 
 interface MessageFeedProps {
   messages: MessageFeedEntry[];
@@ -43,9 +43,12 @@ export default function MessageFeed({ messages }: MessageFeedProps) {
     }
   };
 
-  const getIcon = (type: string) => {
-    switch (type) {
+  const getIcon = (msg: MessageFeedEntry) => {
+    switch (msg.type) {
       case "checkin":
+        if (msg.status === "Venter på svar") {
+          return <Clock className="w-5 h-5 text-orange-500" />;
+        }
         return <CheckCircle2 className="w-5 h-5 text-green-500" />;
       case "deviation":
         return <AlertTriangle className="w-5 h-5 text-red-500" />;
@@ -123,7 +126,7 @@ export default function MessageFeed({ messages }: MessageFeedProps) {
                 <div className="flex p-4 gap-4">
                   {/* Icon / Avatar column */}
                   <div className="flex flex-col items-center gap-2 mt-1 shrink-0 w-10">
-                    {getIcon(msg.type)}
+                    {getIcon(msg)}
                     {msg.employee_name !== "System" && (
                       <div
                         className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-white shadow-sm text-xs"
@@ -174,7 +177,7 @@ export default function MessageFeed({ messages }: MessageFeedProps) {
                     {(msg.extra_info || msg.status) && (
                       <div className="mt-2 flex flex-wrap gap-2 text-[12px]">
                         {msg.status && (
-                          <span className="px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground font-medium">
+                          <span className={`px-2 py-0.5 rounded-full font-medium ${msg.status === "Venter på svar" ? "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400" : "bg-secondary text-secondary-foreground"}`}>
                             Status: {msg.status}
                           </span>
                         )}
