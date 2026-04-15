@@ -10,3 +10,4 @@
 - 2026-04-13: Expanded "Meldinger" tab to show a unified feed of check-ins, deviations, and checklists with distinct icons, Norwegian labels, and combined Supabase queries.
 - 2026-04-13: Updated "Meldinger" feed to include unanswered checkin requests from Kari in orange ("Venter på svar").
 - 2026-04-13: Updated Timeline to warn when active workers miss a check-in. Added a ⚠️ warning icon next to the employee's name and extended missing check-in days on the timeline with a semi-transparent striped overlay. Made the ⚠️ warning icon clickable to simulate sending a reminder via a toast notification.
+- 2026-04-13: Fixed Timeline extension logic to only apply to a worker's most recent project (with status 'pågående') where their last check-in occurred within 3 workdays, avoiding striped bars extending from old or finished projects.
