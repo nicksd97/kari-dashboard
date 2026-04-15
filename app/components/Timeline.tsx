@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { useGesture } from "@use-gesture/react";
 import type { Project, Checklist, Checkin, TimelineEntry } from "@/lib/types";
 import {
@@ -452,7 +453,11 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
                   <span className="rounded-full" style={{ width: 8, height: 8, backgroundColor: h.color }} />
                   <span className="text-[12px] font-semibold text-foreground">{h.label}</span>
                   {isMissingToday && (
-                    <div title="Ikke sjekket inn i dag" className="cursor-help flex items-center justify-center translate-y-[-0.5px]">
+                    <div 
+                      title="Ikke sjekket inn i dag" 
+                      className="cursor-pointer hover:scale-110 transition-transform flex items-center justify-center translate-y-[-0.5px]"
+                      onClick={() => toast.success(`Påminnelse om innsjekking sendt til ${h.label}`)}
+                    >
                       <span className="text-[13px]">⚠️</span>
                     </div>
                   )}
