@@ -169,6 +169,7 @@ const DEMO_DEVIATIONS: Deviation[] = [
 
 const DEMO_MESSAGE_FEED: MessageFeedEntry[] = [
   { id: "demo-msg-1", type: "checkin", employee_name: "Roar", project_number: "802", project_name: "Vika Hustad Isolasjon", extra_info: "Planlagt: Vika Hustad - Isolasjon", description: "Jobber med isolasjon i dag, ferdig med vegger, starter tak etter lunsj", timestamp: "2026-04-13T07:14:00+00:00" },
+  { id: "demo-msg-wait", type: "checkin", employee_name: "Nick", description: "Kari har sendt forespørsel om innsjekking, men ikke fått svar enda.", status: "Venter på svar", timestamp: "2026-04-13T06:50:00+00:00" },
   { id: "demo-dev-1", type: "deviation", employee_name: "Nick", project_number: "767", project_name: "Stavnevegen 31", description: "Ikke vibrert ved utstøping (Grunnmur)", extra_info: "Ansvarlig: Marci Marschall", status: "assigned", timestamp: "2026-04-12T10:00:00+00:00" },
   { id: "demo-cl-1", type: "checklist", employee_name: "System", project_number: "815", project_name: "Jan Erik Peis", description: "Sjekkliste: Ferdigstillelse", status: "Fullført", extra_info: "12/12 punkter", timestamp: "2026-04-11T14:30:00+00:00" },
   { id: "demo-msg-2", type: "checkin", employee_name: "Andrii", project_number: "767", project_name: "Stavnevegen 31", extra_info: "Planlagt: Stavnevegen 31", description: "Fortsetter med kjøkkenmontering, venter på benkeplate", timestamp: "2026-04-10T06:45:00+00:00" },
@@ -683,12 +684,11 @@ export async function fetchLiveMessageFeed(): Promise<MessageFeedEntry[]> {
     const [{ data: checkins }, { data: deviations }, { data: checklists }] = await Promise.all([
       supabase
         .from("checkins")
-        .select("id, employee_id, project_assignment, planned_tasks, raw_response, responded_at")
+        .select("id, employee_id, project_assignment, planned_tasks, raw_response, responded_at, sent_at")
         .eq("company_id", COMPANY_ID)
-        .eq("status", "responded")
-        .not("responded_at", "is", null)
-        .order("responded_at", { ascending: false })
-        .limit(30),
+        .or("responded_at.not.is.null,sent_at.not.is.null")
+        .order("checkin_date", { ascending: false })
+        .limit(50),
       supabase
         .from("deviations")
         .select("id, project_number, description, location, severity, status, reported_by_name, responsible_name, created_at")
@@ -744,15 +744,18 @@ export async function fetchLiveMessageFeed(): Promise<MessageFeedEntry[]> {
     // Process checkins
     for (const c of checkins || []) {
       const projNum = extractProjNum(c.project_assignment);
+      const hasResponded = !!c.responded_at;
+      
       entries.push({
         id: `ci-${c.id}`,
         type: "checkin",
-        timestamp: String(c.responded_at || ""),
+        timestamp: String((hasResponded ? c.responded_at : c.sent_at) || ""),
         employee_name: empNames.get(String(c.employee_id)) || "Ukjent",
         project_number: projNum,
         project_name: projNum ? projNames.get(projNum) : undefined,
-        description: c.raw_response ? String(c.raw_response) : "Sjekket inn",
+        description: hasResponded ? (c.raw_response ? String(c.raw_response) : "Sjekket inn") : "Kari har sendt forespørsel om innsjekking, men ikke fått svar enda.",
         extra_info: c.planned_tasks ? `Planlagt: ${c.planned_tasks}` : undefined,
+        status: hasResponded ? undefined : "Venter på svar",
       });
     }
 
