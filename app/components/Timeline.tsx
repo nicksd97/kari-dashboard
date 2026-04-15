@@ -61,6 +61,20 @@ function dayIndex(rangeStartStr: string, date: string) {
   return daysBetween(rangeStartStr, date);
 }
 
+function isWithin3Workdays(startStr: string, endStr: string) {
+  if (startStr >= endStr) return true;
+  let workdays = 0;
+  const cur = new Date(startStr);
+  const end = new Date(endStr);
+  cur.setDate(cur.getDate() + 1);
+  while (cur <= end) {
+    const dow = cur.getDay();
+    if (dow !== 0 && dow !== 6) workdays++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return workdays <= 3;
+}
+
 // --- Bar colors ---
 
 interface BarStyle {
@@ -310,6 +324,39 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
   // Only show known field employees on the timeline
   const sortedEmployees = EMPLOYEES.filter((emp) => groupedRows[emp]?.length > 0);
 
+  // --- Employee latest checkins for extension logic ---
+  const employeeLatestCheckin = new Map<string, { projectNumber: string; date: string }>();
+  if (hasCheckinData) {
+    for (const entry of timelineEntries) {
+      const emp = entry.employeeName;
+      const currentLatest = employeeLatestCheckin.get(emp);
+      if (!currentLatest || entry.endDate > currentLatest.date) {
+        employeeLatestCheckin.set(emp, { projectNumber: entry.projectNumber, date: entry.endDate });
+      }
+    }
+  }
+
+  // Logic to determine if a project bar needs extension to today
+  const getNeedsExtension = (row: TimelineRow): boolean => {
+    const p = row.project;
+    if (p.status !== "pagaende") return false;
+    
+    const empCheckin = checkins?.find((c) => c.employee === row.employee);
+    const isMissingToday = !empCheckin || empCheckin.status !== "checked_in";
+    if (!isMissingToday) return false;
+
+    const originalBarEnd = row.checkinEndDate || p.estimated_end_date;
+    if (!originalBarEnd || originalBarEnd >= today) return false;
+
+    const empLatest = employeeLatestCheckin.get(row.employee);
+    if (!empLatest) return false;
+
+    const isMostRecentProject = empLatest.projectNumber === p.project_number;
+    const isRecentEnough = isWithin3Workdays(empLatest.date, today);
+
+    return isMostRecentProject && isRecentEnough;
+  };
+
   // --- Layout rows ---
   let y = 0;
   const rows: TimelineRow[] = [];
@@ -443,7 +490,13 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
                 
                 const hasActiveProjectToday = group.some(r => {
                   const start = r.checkinStartDate || r.project.start_date;
-                  return start && start <= today;
+                  const originalEnd = r.checkinEndDate || r.project.estimated_end_date;
+                  if (!start || !originalEnd) return false;
+                  
+                  const isCurrentlyActive = start <= today && originalEnd >= today && r.project.status !== "ferdig";
+                  const extendsToToday = getNeedsExtension(r);
+                  
+                  return isCurrentlyActive || extendsToToday;
                 });
                 
                 const isMissingToday = hasActiveProjectToday && (!empCheckin || empCheckin.status !== "checked_in");
@@ -587,7 +640,7 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
                   const startI = dayIndex(rangeStartStr, barStart);
                   const originalEndI = dayIndex(rangeStartStr, originalBarEnd);
                   
-                  const needsExtension = isMissingToday && originalBarEnd < today;
+                  const needsExtension = getNeedsExtension(row);
                   const endI = needsExtension ? dayIndex(rangeStartStr, today) : originalEndI;
 
                   const origDays = Math.max(1, originalEndI - startI + 1);
