@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useGesture } from "@use-gesture/react";
+import { supabase } from "@/lib/supabase";
 import type { Project, Checklist, Checkin, TimelineEntry } from "@/lib/types";
 import {
   STATUS_COLORS_SOFT,
@@ -176,7 +177,45 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
   const [scrolledToToday, setScrolledToToday] = useState(false);
 
   const [zoom, setZoom] = useState(40);
-  
+  const [remindedEmployees, setRemindedEmployees] = useState<Set<string>>(new Set());
+
+  const handleSendReminder = async (empName: string) => {
+    if (remindedEmployees.has(empName)) return;
+
+    const empMap: Record<string, string> = {
+      Roar: "fbfae1d8-ad2e-40dd-8f53-77c74d49279a",
+      Andrii: "006d86f7-669e-4672-869a-765606e35572",
+      Marci: "f3406bbf-04c7-4743-98c0-3899fc4fe187"
+    };
+
+    const empId = empMap[empName];
+    if (!empId) {
+      toast.error(`Kunne ikke finne ID for ${empName}`);
+      return;
+    }
+
+    // Optimistic UI update
+    setRemindedEmployees(prev => new Set(prev).add(empName));
+    const toastId = toast.loading("Sender påminnelse...");
+
+    const { error } = await supabase
+      .from('followup_requests')
+      .insert({ employee_id: empId, status: 'pending' });
+
+    if (error) {
+      console.error("Feil ved sending av påminnelse:", error);
+      toast.error("Kunne ikke sende påminnelse", { id: toastId });
+      // Revert optimistic update
+      setRemindedEmployees(prev => {
+        const next = new Set(prev);
+        next.delete(empName);
+        return next;
+      });
+    } else {
+      toast.success("Påminnelse sendt!", { id: toastId });
+    }
+  };
+
   // Prevent default pinch zoom on the container to allow custom useGesture pinch
   useEffect(() => {
     const el = scrollRef.current;
@@ -507,11 +546,17 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
                   <span className="text-[12px] font-semibold text-foreground">{h.label}</span>
                   {isMissingToday && (
                     <div 
-                      title="Ikke sjekket inn i dag" 
-                      className="cursor-pointer hover:scale-110 transition-transform flex items-center justify-center translate-y-[-0.5px]"
-                      onClick={() => toast.success(`Påminnelse om innsjekking sendt til ${h.label}`)}
+                      title={remindedEmployees.has(h.label) ? "Påminnelse sendt" : "Send påminnelse"} 
+                      className={`flex items-center justify-center translate-y-[-0.5px] ${
+                        remindedEmployees.has(h.label) 
+                          ? "cursor-default opacity-80" 
+                          : "cursor-pointer hover:scale-110 transition-transform animate-pulse-glow"
+                      }`}
+                      onClick={() => !remindedEmployees.has(h.label) && handleSendReminder(h.label)}
                     >
-                      <span className="text-[13px]">⚠️</span>
+                      <span className="text-[13px]">
+                        {remindedEmployees.has(h.label) ? "✅" : "⚠️"}
+                      </span>
                     </div>
                   )}
                 </div>
