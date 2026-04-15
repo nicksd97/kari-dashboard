@@ -147,7 +147,7 @@ export interface TimelineEntry {
 
 export interface MessageFeedEntry {
   id: string;
-  type: "checkin" | "deviation" | "checklist";
+  type: "checkin" | "deviation" | "checklist" | "message";
   timestamp: string;
   employee_name: string;
   project_number?: string;

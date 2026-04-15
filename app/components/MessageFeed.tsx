@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { MessageFeedEntry } from "@/lib/types";
 import { EMPLOYEE_COLORS } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
-import { CheckCircle2, AlertTriangle, ClipboardCheck, Clock } from "lucide-react";
+import { CheckCircle2, AlertTriangle, ClipboardCheck, Clock, MessageSquare } from "lucide-react";
 
 interface MessageFeedProps {
   messages: MessageFeedEntry[];
@@ -54,6 +54,8 @@ export default function MessageFeed({ messages }: MessageFeedProps) {
         return <AlertTriangle className="w-5 h-5 text-red-500" />;
       case "checklist":
         return <ClipboardCheck className="w-5 h-5 text-blue-500" />;
+      case "message":
+        return <MessageSquare className="w-5 h-5 text-purple-500" />;
       default:
         return null;
     }
@@ -67,6 +69,8 @@ export default function MessageFeed({ messages }: MessageFeedProps) {
         return "Avvik";
       case "checklist":
         return "Sjekkliste";
+      case "message":
+        return "Melding";
       default:
         return type;
     }

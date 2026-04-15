@@ -681,7 +681,7 @@ function countWeekdays(startStr: string, endStr: string): number {
 
 export async function fetchLiveMessageFeed(): Promise<MessageFeedEntry[]> {
   try {
-    const [{ data: checkins }, { data: deviations }, { data: checklists }] = await Promise.all([
+    const [{ data: checkins }, { data: deviations }, { data: checklists }, { data: messages }] = await Promise.all([
       supabase
         .from("checkins")
         .select("id, employee_id, project_assignment, planned_tasks, raw_response, responded_at, sent_at")
@@ -700,7 +700,13 @@ export async function fetchLiveMessageFeed(): Promise<MessageFeedEntry[]> {
         .select("id, template, project_number, project_name, status, completed_at, created_at, done, total")
         .eq("company_id", COMPANY_ID)
         .order("created_at", { ascending: false })
-        .limit(30)
+        .limit(30),
+      supabase
+        .from("message_log")
+        .select("id, channel, recipient, recipient_name, chat_id, project_number, message_preview, message_length, created_at")
+        .eq("company_id", COMPANY_ID)
+        .order("created_at", { ascending: false })
+        .limit(50)
     ]);
 
     const entries: MessageFeedEntry[] = [];
@@ -787,6 +793,22 @@ export async function fetchLiveMessageFeed(): Promise<MessageFeedEntry[]> {
         description: `Sjekkliste: ${cl.template}`,
         status: isCompleted ? "Fullført" : "Sendt",
         extra_info: cl.done != null && cl.total != null ? `${cl.done}/${cl.total} punkter` : undefined,
+      });
+    }
+
+    // Process messages sent by Kari
+    for (const m of messages || []) {
+      const channelLabel = m.channel === "dm" ? "DM" : "Gruppechat";
+      const recipientDisplay = m.recipient_name ? String(m.recipient_name).split(" ")[0] : String(m.recipient || "");
+      entries.push({
+        id: `msg-${m.id}`,
+        type: "message",
+        timestamp: String(m.created_at || ""),
+        employee_name: "Kari",
+        project_number: m.project_number ? String(m.project_number) : undefined,
+        description: m.message_preview ? String(m.message_preview).slice(0, 200) : "Melding sendt",
+        extra_info: `${channelLabel} → ${recipientDisplay}`,
+        status: "Sendt",
       });
     }
 
