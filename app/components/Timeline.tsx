@@ -18,6 +18,7 @@ interface TimelineProps {
 
 // A row in the timeline — either from check-in data or project assignment fallback
 interface TimelineRow {
+  employee: string;
   project: Project;
   y: number;
   fromCheckins: boolean; // true = solid bar, false = semi-transparent (fallback)
@@ -280,6 +281,7 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
       };
 
       groupedRows[emp].push({
+        employee: emp,
         project,
         y: 0,
         fromCheckins: true,
@@ -297,6 +299,7 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
     allEmployees.add(p.assigned);
     if (!groupedRows[p.assigned]) groupedRows[p.assigned] = [];
     groupedRows[p.assigned].push({
+      employee: p.assigned,
       project: p,
       y: 0,
       fromCheckins: false,
@@ -433,12 +436,28 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
             </div>
             {/* Employee headers + project labels */}
             <div className="relative" style={{ height: totalHeight }}>
-              {headers.map((h) => (
+              {headers.map((h) => {
+                const group = groupedRows[h.label] || [];
+                const empCheckin = checkins?.find((c) => c.employee === h.label);
+                
+                const hasActiveProjectToday = group.some(r => {
+                  const start = r.checkinStartDate || r.project.start_date;
+                  return start && start <= today;
+                });
+                
+                const isMissingToday = hasActiveProjectToday && (!empCheckin || empCheckin.status !== "checked_in");
+
+                return (
                 <div key={h.label} className="absolute flex items-center gap-2 pl-5 bg-secondary/30" style={{ top: h.y, width: LEFT_COL, height: EMP_HEADER, borderBottom: "1px solid var(--border)" }}>
                   <span className="rounded-full" style={{ width: 8, height: 8, backgroundColor: h.color }} />
                   <span className="text-[12px] font-semibold text-foreground">{h.label}</span>
+                  {isMissingToday && (
+                    <div title="Ikke sjekket inn i dag" className="cursor-help flex items-center justify-center translate-y-[-0.5px]">
+                      <span className="text-[13px]">⚠️</span>
+                    </div>
+                  )}
                 </div>
-              ))}
+              )})}
               {rows.map((row, rowIdx) => {
                 const p = row.project;
                 const isFerdig = p.status === "ferdig";
@@ -545,9 +564,9 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
                   const p = row.project;
                   // Use check-in dates when available, fall back to project dates
                   const barStart = row.checkinStartDate || p.start_date;
-                  const barEnd = row.checkinEndDate || p.estimated_end_date;
+                  const originalBarEnd = row.checkinEndDate || p.estimated_end_date;
 
-                  if (!barStart || !barEnd) {
+                  if (!barStart || !originalBarEnd) {
                     return (
                       <div key={`${p.project_number}-${rowIdx}`} className="absolute flex items-center pl-2" style={{ top: row.y, left: 0, height: ROW_HEIGHT }}>
                         <span className="rounded px-2 py-0.5 text-[10px] font-medium" style={{ backgroundColor: STATUS_COLORS_SOFT[p.status] || "#eee", color: "#555" }}>
@@ -557,11 +576,21 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
                     );
                   }
 
+                  const empCheckin = checkins?.find(c => c.employee === row.employee);
+                  const isMissingToday = !empCheckin || empCheckin.status !== "checked_in";
+
                   const startI = dayIndex(rangeStartStr, barStart);
-                  const endI = dayIndex(rangeStartStr, barEnd);
-                  const barDays = Math.max(1, endI - startI + 1);
-                  const barLeft = startI * zoom;
-                  const barWidth = barDays * zoom;
+                  const originalEndI = dayIndex(rangeStartStr, originalBarEnd);
+                  
+                  const needsExtension = isMissingToday && originalBarEnd < today;
+                  const endI = needsExtension ? dayIndex(rangeStartStr, today) : originalEndI;
+
+                  const origDays = Math.max(1, originalEndI - startI + 1);
+                  const origWidth = origDays * zoom;
+
+                  const extDays = needsExtension ? Math.max(1, endI - originalEndI) : 0;
+                  const extWidth = extDays * zoom;
+
                   const isHovered = hoveredProject === p.project_number;
                   const bs = getBarStyle(p, today);
                   const empColor = EMPLOYEE_COLORS[p.assigned || ""] || null;
@@ -570,20 +599,23 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
                   return (
                     <div
                       key={`${p.project_number}-${rowIdx}`}
-                      className="absolute"
-                      style={{ top: row.y, left: barLeft, width: barWidth, height: ROW_HEIGHT, opacity: isFallback ? 0.5 : 1 }}
+                      className="absolute flex"
+                      style={{ top: row.y, left: startI * zoom, height: ROW_HEIGHT }}
                     >
+                      {/* Main Bar */}
                       <div
-                        className="absolute flex items-center cursor-pointer transition-shadow"
+                        className="absolute flex items-center cursor-pointer transition-shadow overflow-hidden"
                         style={{
                           left: 0,
-                          width: barWidth,
+                          width: origWidth,
                           height: BAR_HEIGHT,
                           top: (ROW_HEIGHT - BAR_HEIGHT) / 2,
                           backgroundColor: bs.bg,
                           border: isHovered ? "1px solid rgba(0,0,0,0.3)" : isFallback ? "1px dashed #B0B0B0" : bs.border,
-                          borderRadius: 6,
+                          borderRight: needsExtension ? "none" : undefined,
+                          borderRadius: needsExtension ? "6px 0 0 6px" : 6,
                           boxShadow: isHovered ? "0 2px 6px rgba(0,0,0,0.12)" : "none",
+                          opacity: isFallback ? 0.5 : 1,
                         }}
                         onMouseEnter={(e) => handleBarEnter(p.project_number, e)}
                         onMouseMove={handleBarMouseMove}
@@ -597,13 +629,41 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
                       >
                         {empColor && showDayNum && (
                           <div
-                            className="flex shrink-0 items-center justify-center rounded-full text-[8px] font-bold text-white ml-1.5"
+                            className="flex shrink-0 items-center justify-center rounded-full text-[8px] font-bold text-white ml-1.5 z-10"
                             style={{ width: 16, height: 16, backgroundColor: empColor }}
                           >
                             {(p.assigned || "?")[0]}
                           </div>
                         )}
                       </div>
+
+                      {/* Extended Bar (Missing Check-in) */}
+                      {needsExtension && (
+                        <div
+                          className="absolute flex items-center cursor-pointer transition-shadow overflow-hidden"
+                          style={{
+                            left: origWidth,
+                            width: extWidth,
+                            height: BAR_HEIGHT,
+                            top: (ROW_HEIGHT - BAR_HEIGHT) / 2,
+                            backgroundColor: bs.bg,
+                            backgroundImage: "repeating-linear-gradient(45deg, rgba(255,255,255,0.4), rgba(255,255,255,0.4) 10px, transparent 10px, transparent 20px)",
+                            border: isHovered ? "1px solid rgba(0,0,0,0.3)" : bs.border,
+                            borderLeft: "1px dashed rgba(0,0,0,0.2)",
+                            borderRadius: "0 6px 6px 0",
+                            opacity: 0.6,
+                          }}
+                          onMouseEnter={(e) => handleBarEnter(p.project_number, e)}
+                          onMouseMove={handleBarMouseMove}
+                          onMouseLeave={handleBarLeave}
+                          onClick={(e) => {
+                            if (window.innerWidth < 1024) {
+                              handleBarEnter(p.project_number, e);
+                              setTimeout(() => handleBarLeave(), 3000);
+                            }
+                          }}
+                        />
+                      )}
                     </div>
                   );
                 })}
