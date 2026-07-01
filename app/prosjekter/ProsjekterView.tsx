@@ -85,14 +85,16 @@ export default function ProsjekterView({ projects: initial, userEmail }: Props) 
   const [sort, setSort] = useState<'nr' | 'start' | 'sum' | 'status' | 'kunde'>('nr')
   const [, startTransition] = useTransition()
   const router = useRouter()
+  const [showArchived, setShowArchived] = useState(false)
 
   const totalSum = rows.reduce((s, p) => s + (p.agreed_price ?? 0), 0)
   const withSum = rows.filter(p => p.agreed_price != null).length
   const active = rows.filter(p => p.status === 'pågår').length
   const done = rows.filter(p => p.status === 'ferdig').length
 
+  const archivedCount = rows.filter(p => p.archived).length
   const sorted = [...rows]
-    .filter(p => filter === 'alle' || p.status === filter)
+    .filter(p => (showArchived || !p.archived) && (filter === 'alle' || p.status === filter))
     .sort((a, b) => {
       if (sort === 'nr') return a.project_number.localeCompare(b.project_number, 'nb', { numeric: true })
       if (sort === 'sum') return (b.agreed_price ?? 0) - (a.agreed_price ?? 0)
@@ -102,7 +104,7 @@ export default function ProsjekterView({ projects: initial, userEmail }: Props) 
       return 0
     })
 
-  function handleField(nr: string, field: string, value: string | number | string[] | null) {
+  function handleField(nr: string, field: string, value: string | number | string[] | boolean | null) {
     setRows(prev => prev.map(r => r.project_number === nr ? { ...r, [field]: value } : r))
     startTransition(() => updateProject(nr, field, value))
   }
@@ -113,14 +115,14 @@ export default function ProsjekterView({ projects: initial, userEmail }: Props) 
   }
 
   function exportCSV() {
-    const cols = ['Nr', 'Kunde', 'E-post', 'Telefon', 'Adresse', 'Ansvarlige', 'Kontraktssum', 'Start', 'Slutt', 'Status']
+    const cols = ['Nr', 'Kunde', 'E-post', 'Telefon', 'Adresse', 'Ansvarlige', 'Kontraktssum', 'Start', 'Slutt', 'Status', 'Notater']
     const esc = (v: unknown) => '"' + String(v ?? '').replace(/"/g, '""') + '"'
     const lines = [cols.join(';'), ...rows.map(p =>
       [
         p.project_number, p.customer_name, p.customer_email, p.customer_phone,
         p.address, (p.assigned_employees ?? []).join(', '),
         p.agreed_price ?? '', p.start_date, p.estimated_end_date,
-        STATUS_LABELS[p.status] ?? p.status,
+        STATUS_LABELS[p.status] ?? p.status, p.notes,
       ].map(esc).join(';')
     )]
     const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' })
@@ -151,6 +153,9 @@ export default function ProsjekterView({ projects: initial, userEmail }: Props) 
         .p-nr { font-weight:600; color:#1f4b4a; font-variant-numeric:tabular-nums; }
         tbody tr:hover td { background:#faf9f4; }
         .p-st-pick { border:0; border-radius:999px; padding:5px 10px; font-weight:600; font-size:12px; cursor:pointer; appearance:none; font-family:inherit; }
+        .p-arch { border:0; background:transparent; color:#aaa; cursor:pointer; font-size:15px; padding:5px 6px; border-radius:6px; }
+        .p-arch:hover { color:#1f4b4a; background:#e8f0ef; }
+        tr.archived-row td { opacity: 0.45; }
       `}</style>
 
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: '22px 20px 60px' }}>
@@ -211,6 +216,13 @@ export default function ProsjekterView({ projects: initial, userEmail }: Props) 
             <option value="kunde">Kunde</option>
           </select>
           <button className="p-btn" onClick={exportCSV}>Eksporter CSV</button>
+          <button
+            className="p-btn"
+            style={{ color: showArchived ? '#1f4b4a' : '#4a534f', borderColor: showArchived ? '#1f4b4a' : '#d9d6cd' }}
+            onClick={() => setShowArchived(v => !v)}
+          >
+            {showArchived ? 'Skjul arkiverte' : 'Vis arkiverte'}{archivedCount > 0 ? ' (' + archivedCount + ')' : ''}
+          </button>
         </div>
 
         <div className="p-card" style={{ overflow: 'hidden' }}>
@@ -228,12 +240,13 @@ export default function ProsjekterView({ projects: initial, userEmail }: Props) 
                   <th className="p-th" style={{ width: 136 }}>Start</th>
                   <th className="p-th" style={{ width: 136 }}>Slutt</th>
                   <th className="p-th" style={{ width: 135 }}>Status</th>
-                  <th className="p-th" style={{ width: 36 }} />
+                  <th className="p-th" style={{ minWidth: 180 }}>Notater</th>
+                  <th className="p-th" style={{ width: 74 }} />
                 </tr>
               </thead>
               <tbody>
                 {sorted.map(p => (
-                  <tr key={p.project_number}>
+                  <tr key={p.project_number} className={p.archived ? 'archived-row' : ''}>
                     <td className="p-td p-nr">{p.project_number}</td>
                     <td className="p-td">
                       <input className="p-input" defaultValue={p.customer_name ?? ''} onBlur={e => handleField(p.project_number, 'customer_name', e.target.value)} />
@@ -283,18 +296,26 @@ export default function ProsjekterView({ projects: initial, userEmail }: Props) 
                       </select>
                     </td>
                     <td className="p-td">
-                      <button className="p-del" onClick={() => {
-                        if (confirm('Fjerne prosjekt ' + p.project_number + ' - ' + p.customer_name + '?')) {
+                      <input className="p-input" defaultValue={p.notes ?? ''} placeholder="Notater" onBlur={e => handleField(p.project_number, 'notes', e.target.value)} />
+                    </td>
+                    <td className="p-td" style={{ whiteSpace: 'nowrap' }}>
+                      <button
+                        className="p-arch"
+                        title={p.archived ? 'Gjenopprett' : 'Arkiver'}
+                        onClick={() => handleField(p.project_number, 'archived', !p.archived)}
+                      >{p.archived ? '↩' : '⊡'}</button>
+                      <button className="p-del" title="Slett" onClick={() => {
+                        if (confirm('Slett prosjekt ' + p.project_number + ' permanent?')) {
                           setRows(prev => prev.filter(r => r.project_number !== p.project_number))
                           startTransition(() => deleteProject(p.project_number))
                         }
-                      }}>x</button>
+                      }}>×</button>
                     </td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
-                <tr><td colSpan={11} style={{ padding: 12 }}>
+                <tr><td colSpan={12} style={{ padding: 12 }}>
                   <button className="p-addrow" onClick={() => {
                     startTransition(async () => {
                       const newRow = await addProject(rows)

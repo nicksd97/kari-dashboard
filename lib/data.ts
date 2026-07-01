@@ -50,6 +50,8 @@ export async function fetchProjects(): Promise<{ projects: Project[]; isLive: bo
           assigned_employees: Array.isArray(p.assigned_employees) ? (p.assigned_employees as string[]) : (p.assigned ? [String(p.assigned)] : []),
           customer_email: p.customer_email ? String(p.customer_email) : undefined,
           customer_phone: p.customer_phone ? String(p.customer_phone) : undefined,
+          notes: p.notes ? String(p.notes) : undefined,
+          archived: p.archived === true,
           dependency: p.dependency ? String(p.dependency) : undefined,
         } as Project;
       })
@@ -210,6 +212,8 @@ export async function fetchLiveProjects(): Promise<Project[]> {
           assigned_employees: Array.isArray(p.assigned_employees) && (p.assigned_employees as string[]).length > 0 ? (p.assigned_employees as string[]) : (assignedName ? [assignedName] : []),
           customer_email: p.customer_email ? String(p.customer_email) : undefined,
           customer_phone: p.customer_phone ? String(p.customer_phone) : undefined,
+          notes: p.notes ? String(p.notes) : undefined,
+          archived: p.archived === true,
           dependency: p.dependency ? String(p.dependency) : undefined,
         } as Project;
       })

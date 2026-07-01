@@ -11,6 +11,8 @@ export interface Project {
   assigned_employees?: string[];
   customer_email?: string;
   customer_phone?: string;
+  notes?: string;
+  archived?: boolean;
   dependency?: string;
 }
 

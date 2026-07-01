@@ -1,4 +1,4 @@
-﻿-- ============================================================
+-- ============================================================
 -- Prosjekter: utvid eksisterende projects-tabell og seed manglende
 -- Kjør dette i Supabase SQL Editor
 -- ============================================================
@@ -79,3 +79,10 @@ SELECT project_number, assigned, assigned_employees, customer_email, customer_ph
 FROM projects
 WHERE company_id = 'a12dfbf0-a9d6-4786-95fe-6f1678d9d980'
 ORDER BY project_number::int;
+
+
+-- ============================================================
+-- MIGRERING 3: archived-flagg og notater
+-- ============================================================
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS archived BOOLEAN DEFAULT false;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS notes    TEXT    DEFAULT '';
