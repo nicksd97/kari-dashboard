@@ -282,7 +282,7 @@ export default function Dashboard({
               {projects.map((p) => (
                 <CommandItem
                   key={p.project_number}
-                  value={`${p.project_number} ${p.name} ${p.customer_name || ""} ${(p.assigned_employees ?? []).join(" ")}`}
+                  value={`${p.project_number} ${p.name} ${p.customer_name || ""} ${p.assigned || ""}`}
                   onSelect={() => {
                     setSearchOpen(false);
                     router.push(`/project/${p.project_number}`);

@@ -8,7 +8,7 @@ export interface Project {
   estimated_end_date?: string;
   end_date_defaulted?: boolean;
   agreed_price?: number;
-  assigned_employees?: string[];
+  assigned?: string;
   customer_email?: string;
   customer_phone?: string;
   notes?: string;
@@ -41,30 +41,33 @@ export interface Lead {
 
 // Slightly more saturated bar colors
 export const STATUS_COLORS: Record<string, string> = {
-  befart: "#9CC8F0",
-  "tilbud sendt": "#B8B4F0",
-  vunnet: "#6DD4B1",
-  tapt: "#F0A893",
-  "pågår": "#F5B84D",
+  innkommende: "#9CC8F0",
+  planlegging: "#B8B4F0",
+  materialer: "#F5B84D",
+  pagaende: "#6DD4B1",
+  "venter kunde": "#F0A893",
+  fakturering: "#EEA4BC",
   ferdig: "#A8D175",
 };
 
 // Softer badge/card colors
 export const STATUS_COLORS_SOFT: Record<string, string> = {
-  befart: "#B5D4F4",
-  "tilbud sendt": "#CECBF6",
-  vunnet: "#9FE1CB",
-  tapt: "#F5C4B3",
-  "pågår": "#FAC775",
+  innkommende: "#B5D4F4",
+  planlegging: "#CECBF6",
+  materialer: "#FAC775",
+  pagaende: "#9FE1CB",
+  "venter kunde": "#F5C4B3",
+  fakturering: "#F4C0D1",
   ferdig: "#C0DD97",
 };
 
 export const STATUS_LABELS: Record<string, string> = {
-  befart: "Befart",
-  "tilbud sendt": "Tilbud sendt",
-  vunnet: "Vunnet",
-  tapt: "Tapt",
-  "pågår": "Pågår",
+  innkommende: "Innkommende",
+  planlegging: "Planlegging",
+  materialer: "Materialer",
+  pagaende: "Pågående",
+  "venter kunde": "Venter kunde",
+  fakturering: "Fakturering",
   ferdig: "Ferdig",
 };
 

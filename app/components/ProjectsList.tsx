@@ -14,11 +14,12 @@ interface ProjectsListProps {
 
 const STATUS_FILTERS = [
   { key: "alle", label: "Alle" },
-  { key: "pÃ¥gÃ¥r", label: "PÃ¥gÃ¥r" },
-  { key: "befart", label: "Befart" },
-  { key: "tilbud sendt", label: "Tilbud sendt" },
-  { key: "vunnet", label: "Vunnet" },
-  { key: "tapt", label: "Tapt" },
+  { key: "innkommende", label: "Innkommende" },
+  { key: "planlegging", label: "Planlegging" },
+  { key: "materialer", label: "Materialer" },
+  { key: "pagaende", label: "Pågående" },
+  { key: "venter kunde", label: "Venter kunde" },
+  { key: "fakturering", label: "Fakturering" },
   { key: "ferdig", label: "Ferdig" },
 ];
 
@@ -164,10 +165,10 @@ export default function ProjectsList({ projects }: ProjectsListProps) {
                   >
                     {STATUS_LABELS[p.status] || p.status}
                   </span>
-                  {(p.assigned_employees?.length ?? 0) > 0 && (
+                  {p.assigned && (
                     <span className="text-[11px] flex items-center gap-1 text-muted-foreground/70">
-                      <span className="rounded-full" style={{ width: 5, height: 5, backgroundColor: EMPLOYEE_COLORS[p.assigned_employees![0]] || "#888" }} />
-                      {p.assigned_employees![0]}
+                      <span className="rounded-full" style={{ width: 5, height: 5, backgroundColor: EMPLOYEE_COLORS[p.assigned] || "#888" }} />
+                      {p.assigned}
                     </span>
                   )}
                 </div>
@@ -180,10 +181,10 @@ export default function ProjectsList({ projects }: ProjectsListProps) {
                     {p.customer_name}
                   </span>
                 )}
-                {(p.assigned_employees?.length ?? 0) > 0 && (
+                {p.assigned && (
                   <span className="flex items-center gap-1.5 text-[12px] w-16 text-muted-foreground">
-                    <span className="rounded-full" style={{ width: 6, height: 6, backgroundColor: EMPLOYEE_COLORS[p.assigned_employees![0]] || "#888" }} />
-                    {p.assigned_employees![0]}
+                    <span className="rounded-full" style={{ width: 6, height: 6, backgroundColor: EMPLOYEE_COLORS[p.assigned] || "#888" }} />
+                    {p.assigned}
                   </span>
                 )}
                 {p.start_date && (

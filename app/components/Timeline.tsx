@@ -88,8 +88,8 @@ function getBarStyle(p: Project, today: string): BarStyle {
     return { bg: "#BDBDBD", border: "1px solid #A8A8A8" };
   }
   if (
-    p.status === "befart" ||
-    p.status === "tilbud sendt" ||
+    p.status === "innkommende" ||
+    p.status === "planlegging" ||
     (p.start_date && p.start_date > today)
   ) {
     return { bg: "var(--card)", border: "1px dashed #C0C0C0" };
@@ -102,7 +102,7 @@ function getBarStyle(p: Project, today: string): BarStyle {
     p.estimated_end_date &&
     daysBetween(today, p.estimated_end_date) <= 3 &&
     daysBetween(today, p.estimated_end_date) >= 0;
-  if (p.status === "tilbud sendt" || nearDeadline) {
+  if (p.status === "planlegging" || nearDeadline) {
     return { bg: "#FF9800", border: "1px solid #E68900" };
   }
   return { bg: "#4CAF50", border: "1px solid #388E3C" };
@@ -121,8 +121,8 @@ const STAGE_ITEMS: Record<StageKey, string[]> = {
 };
 
 function getActiveStage(status: string): StageKey {
-  if (status === "befart" || status === "tilbud sendt") return 1;
-  if (status === "vunnet" || status === "pÃƒÆ’Ã‚Â¥gÃƒÆ’Ã‚Â¥r") return 2;
+  if (status === "innkommende" || status === "planlegging") return 1;
+  if (status === "materialer" || status === "pagaende") return 2;
   return 3;
 }
 
@@ -223,7 +223,7 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
 
   const isValidProjectNum = (pn: string) => /^[0-9]{3}$/.test(pn);
   const safeProjects = (projects || []).filter((p) => p.status !== "ferdig" && isValidProjectNum(p.project_number));
-  const datedProjects = safeProjects.filter((p) => p.start_date && p.estimated_end_date && (p.assigned_employees?.length ?? 0) > 0);
+  const datedProjects = safeProjects.filter((p) => p.start_date && p.estimated_end_date && !!p.assigned);
   const today = new Date().toISOString().split("T")[0];
 
   // --- Timeline range ---
@@ -308,7 +308,7 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
       const project: Project = matchedProject || {
         project_number: entry.projectNumber,
         name: entry.projectName,
-        status: "pÃƒÆ’Ã‚Â¥gÃƒÆ’Ã‚Â¥r",
+        status: "pagaende",
         start_date: entry.startDate,
         estimated_end_date: entry.endDate,
       };
@@ -324,21 +324,21 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
     }
   }
 
-  // Fallback: projects with assigned_employees but no check-in data for that employee+project
+  // Fallback: projects with assigned but no check-in data for that employee+project
   for (const p of datedProjects) {
-    for (const emp of (p.assigned_employees ?? [])) {
-      if (!EMPLOYEES.includes(emp)) continue;
-      const key = `${emp}|${p.project_number}`;
-      if (checkinCovered.has(key)) continue;
-      allEmployees.add(emp);
-      if (!groupedRows[emp]) groupedRows[emp] = [];
-      groupedRows[emp].push({
-        employee: emp,
-        project: p,
-        y: 0,
-        fromCheckins: false,
-      });
-    }
+    if (!p.assigned) continue;
+    const emp = p.assigned;
+    if (!EMPLOYEES.includes(emp)) continue;
+    const key = `${emp}|${p.project_number}`;
+    if (checkinCovered.has(key)) continue;
+    allEmployees.add(emp);
+    if (!groupedRows[emp]) groupedRows[emp] = [];
+    groupedRows[emp].push({
+      employee: emp,
+      project: p,
+      y: 0,
+      fromCheckins: false,
+    });
   }
 
   // Only show known field employees on the timeline
@@ -359,7 +359,7 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
   // Logic to determine if a project bar needs extension to today
   const getNeedsExtension = (row: TimelineRow): boolean => {
     const p = row.project;
-    if (p.status !== "pÃƒÆ’Ã‚Â¥gÃƒÆ’Ã‚Â¥r") return false;
+    if (p.status !== "pagaende") return false;
     
     const empCheckin = checkins?.find((c) => c.employee === row.employee);
     const isMissingToday = !empCheckin || empCheckin.status !== "checked_in";
@@ -677,7 +677,7 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
 
                   const isHovered = hoveredProject === p.project_number;
                   const bs = getBarStyle(p, today);
-                  const empColor = EMPLOYEE_COLORS[p.assigned_employees?.[0] || ""] || null;
+                  const empColor = EMPLOYEE_COLORS[p.assigned || ""] || null;
                   const isFallback = !row.fromCheckins;
 
                   return (
@@ -716,7 +716,7 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
                             className="flex shrink-0 items-center justify-center rounded-full text-[8px] font-bold text-white ml-1.5 z-10"
                             style={{ width: 16, height: 16, backgroundColor: empColor }}
                           >
-                            {(p.assigned_employees?.[0] || "?")[0]}
+                            {(p.assigned || "?")[0]}
                           </div>
                         )}
                       </div>
@@ -818,14 +818,12 @@ function HoverPopup({
           </span>
         </div>
 
-        {(p.assigned_employees?.length ?? 0) > 0 && (
+        {p.assigned && (
           <div className="mb-3 flex items-center gap-2 flex-wrap text-[13px] text-muted-foreground">
-            {p.assigned_employees!.map(emp => (
-              <span key={emp} className="flex items-center gap-1.5">
-                <span className="rounded-full" style={{ width: 8, height: 8, backgroundColor: EMPLOYEE_COLORS[emp] || "#888" }} />
-                <span className="font-medium">{emp}</span>
+              <span key={p.assigned} className="flex items-center gap-1.5">
+                <span className="rounded-full" style={{ width: 8, height: 8, backgroundColor: EMPLOYEE_COLORS[p.assigned] || "#888" }} />
+                <span className="font-medium">{p.assigned}</span>
               </span>
-            ))}
           </div>
         )}
 

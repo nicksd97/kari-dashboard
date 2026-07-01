@@ -10,9 +10,9 @@ interface StatCardsProps {
 export default function StatCards({ projects: rawProjects, leads: rawLeads }: StatCardsProps) {
   const projects = rawProjects || [];
   const leads = rawLeads || [];
-  const active = projects.filter((p) => p.status === "pågår").length;
+  const active = projects.filter((p) => p.status === "pagaende").length;
   const planning = projects.filter((p) =>
-    ["befart", "tilbud sendt", "vunnet"].includes(p.status)
+    ["innkommende", "planlegging", "materialer"].includes(p.status)
   ).length;
   const completed = projects.filter((p) => p.status === "ferdig").length;
   const newLeads = leads.filter((l) => l.status === "new").length;

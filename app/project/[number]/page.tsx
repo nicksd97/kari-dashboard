@@ -41,7 +41,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ number
       start_date: data.start_date ? String(data.start_date) : undefined,
       estimated_end_date: data.estimated_end_date ? String(data.estimated_end_date) : undefined,
       agreed_price: data.agreed_price ? Number(data.agreed_price) : undefined,
-      assigned_employees: empData?.name ? [empData.name.split(" ")[0]] : (Array.isArray(data.assigned_employees) ? data.assigned_employees : []),
+      assigned: empData?.name ? empData.name.split(" ")[0] : undefined,
     };
   }
 

@@ -1,0 +1,513 @@
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+
+<style>
+  :root {
+    --ink: #191d1c;
+    --ink-soft: #4a534f;
+    --line: #d9d6cd;
+    --line-soft: #e7e4db;
+    --paper: #f2f0ea;
+    --panel: #ffffff;
+    --petrol: #1f4b4a;
+    --petrol-deep: #143332;
+    --amber: #d99400;
+    --green: #2f8158;
+    --red: #c1483c;
+    --slate: #8b93a1;
+    --blue: #2f6bd6;
+    --shadow: 0 1px 2px rgba(20,25,24,.06), 0 8px 24px rgba(20,25,24,.06);
+    --r: 12px;
+    --mono: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    --disp: 'Space Grotesk', 'Inter', ui-sans-serif, system-ui, sans-serif;
+    --body: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 22px 20px 60px; }
+
+  /* header */
+  header.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; margin-bottom: 18px; }
+  .brand { display: flex; align-items: center; gap: 13px; }
+  .mark {
+    width: 42px; height: 42px; border-radius: 10px; flex: none;
+    background: var(--petrol); color: #f2f0ea;
+    display: grid; place-items: center;
+    font-family: var(--disp); font-weight: 700; font-size: 18px; letter-spacing: .5px;
+  }
+  .brand h1 { font-family: var(--disp); font-weight: 700; font-size: 20px; margin: 0; letter-spacing: -.2px; }
+  .brand p { margin: 1px 0 0; color: var(--ink-soft); font-size: 12.5px; }
+
+  /* kpi strip */
+  .kpis { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; margin-bottom: 16px; }
+  .kpi {
+    background: var(--panel); border: 1px solid var(--line-soft); border-radius: var(--r);
+    padding: 13px 16px; box-shadow: var(--shadow);
+  }
+  .kpi .lab { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; }
+  .kpi .val { font-family: var(--disp); font-weight: 700; font-size: 24px; margin-top: 4px; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
+  .kpi .sub { font-size: 11.5px; color: var(--ink-soft); margin-top: 1px; }
+  .kpi.accent { background: var(--petrol); border-color: var(--petrol-deep); color: #eef2f0; }
+  .kpi.accent .lab, .kpi.accent .sub { color: #b9cccb; }
+
+  /* toolbar */
+  .toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .tabs { display: inline-flex; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 3px; box-shadow: var(--shadow); }
+  .tabs button {
+    font-family: var(--body); font-size: 13px; font-weight: 600; color: var(--ink-soft);
+    border: 0; background: transparent; padding: 7px 15px; border-radius: 7px; cursor: pointer;
+  }
+  .tabs button.on { background: var(--petrol); color: #fff; }
+  .spacer { flex: 1 1 auto; }
+  .ctl { display: inline-flex; align-items: center; gap: 6px; }
+  .ctl label { font-size: 12px; color: var(--ink-soft); font-weight: 500; }
+  select.pick, .btn {
+    font-family: var(--body); font-size: 13px; color: var(--ink);
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 7px 11px; cursor: pointer;
+  }
+  .btn { font-weight: 600; }
+  .btn:hover { border-color: var(--petrol); }
+  .btn.solid { background: var(--petrol); color: #fff; border-color: var(--petrol); }
+  .btn.solid:hover { background: var(--petrol-deep); }
+  .btn.ghost { color: var(--ink-soft); }
+
+  /* card */
+  .card { background: var(--panel); border: 1px solid var(--line-soft); border-radius: var(--r); box-shadow: var(--shadow); overflow: hidden; }
+
+  /* table */
+  .tbl-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 900px; }
+  thead th {
+    text-align: left; font-size: 11px; letter-spacing: .05em; text-transform: uppercase;
+    color: var(--ink-soft); font-weight: 600; padding: 11px 12px; border-bottom: 1.5px solid var(--line);
+    white-space: nowrap; background: #faf9f5; position: sticky; top: 0; z-index: 2;
+  }
+  tbody td { padding: 4px 12px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
+  tbody tr:hover { background: #faf9f4; }
+  td.nr { font-family: var(--disp); font-weight: 600; color: var(--petrol); font-variant-numeric: tabular-nums; }
+  .cell-in {
+    width: 100%; border: 1px solid transparent; background: transparent; border-radius: 6px;
+    padding: 7px 8px; font-family: var(--body); font-size: 13.5px; color: var(--ink);
+  }
+  .cell-in:hover { border-color: var(--line); }
+  .cell-in:focus { outline: none; border-color: var(--petrol); background: #fff; box-shadow: 0 0 0 3px rgba(31,75,74,.10); }
+  .cell-in.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .cell-in.date { min-width: 130px; }
+  input[type=date].cell-in { color: var(--ink); }
+  input.cell-in::placeholder { color: #b7b3a8; }
+
+  .statuspick { border: 0; border-radius: 999px; padding: 6px 12px 6px 24px; font-weight: 600; font-size: 12.5px; cursor: pointer; -webkit-appearance: none; appearance: none; position: relative; }
+  .st-wrap { position: relative; display: inline-flex; align-items: center; }
+  .st-dot { position: absolute; left: 10px; width: 8px; height: 8px; border-radius: 50%; pointer-events: none; }
+  .st-Planlagt { background: #eef0f3; color: #4a5568; }   .dot-Planlagt { background: var(--slate); }
+  .st-Pågår    { background: #fbf0d6; color: #8a6100; }   .dot-Pågår    { background: var(--amber); }
+  .st-Fullført { background: #dff0e6; color: #1f5c3d; }   .dot-Fullført { background: var(--green); }
+  .st-Forsinket{ background: #f8dedb; color: #8f2f26; }   .dot-Forsinket{ background: var(--red); }
+
+  .del { border: 0; background: transparent; color: #bbb; cursor: pointer; font-size: 17px; line-height: 1; padding: 6px 8px; border-radius: 6px; }
+  .del:hover { color: var(--red); background: #f8dedb; }
+  td.adr { color: var(--ink-soft); font-size: 13px; max-width: 240px; }
+
+  tfoot td { padding: 12px; }
+  .addrow { color: var(--petrol); font-weight: 600; background: none; border: 1px dashed var(--line); border-radius: 8px; padding: 8px 14px; cursor: pointer; font-family: var(--body); font-size: 13px; }
+  .addrow:hover { border-color: var(--petrol); background: #f5f8f7; }
+
+  /* timeline */
+  .gantt-head { display: flex; align-items: center; justify-content: space-between; padding: 13px 16px; border-bottom: 1px solid var(--line-soft); flex-wrap: wrap; gap: 8px; }
+  .gantt-head h2 { font-family: var(--disp); font-size: 15px; margin: 0; font-weight: 600; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-soft); }
+  .legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+
+  .gantt-scroll { overflow-x: auto; overflow-y: hidden; }
+  .gantt { position: relative; }
+  .g-row { display: grid; grid-template-columns: 240px 1fr; align-items: stretch; }
+  .g-lab { padding: 0 14px; display: flex; flex-direction: column; justify-content: center; border-right: 1.5px solid var(--line); position: sticky; left: 0; background: var(--panel); z-index: 3; min-height: 40px; }
+  .g-lab.headlab { min-height: 34px; background: #faf9f5; border-bottom: 1px solid var(--line-soft); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-soft); font-weight: 600; justify-content: center; }
+  .g-lab .k { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .g-lab .n { font-size: 11px; color: var(--ink-soft); font-family: var(--disp); }
+  .g-track-head { position: relative; height: 34px; background: #faf9f5; border-bottom: 1px solid var(--line-soft); overflow: hidden; }
+  .g-track { position: relative; min-height: 40px; border-bottom: 1px solid var(--line-soft); }
+  .g-row:nth-child(even) .g-track { background: #fbfaf6; }
+  .month-cell { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--line-soft); }
+  .month-lab { position: absolute; top: 8px; font-size: 11px; color: var(--ink-soft); font-weight: 600; padding-left: 7px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .gridline { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--line-soft); pointer-events: none; }
+  .today { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--blue); z-index: 4; pointer-events: none; }
+  .today .tlab { position: absolute; top: 2px; left: 4px; font-size: 10px; font-weight: 700; color: var(--blue); background: #fff; padding: 0 4px; border-radius: 4px; white-space: nowrap; }
+  .bar {
+    position: absolute; top: 50%; transform: translateY(-50%); height: 24px; border-radius: 6px;
+    display: flex; align-items: center; padding: 0 9px; font-size: 11.5px; font-weight: 600; color: #fff;
+    white-space: nowrap; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.15); cursor: default;
+  }
+  .bar .sum { opacity: .85; font-weight: 500; margin-left: 7px; }
+  .bar-Planlagt { background: var(--slate); }
+  .bar-Pågår    { background: var(--amber); }
+  .bar-Fullført { background: var(--green); }
+  .bar-Forsinket{ background: var(--red); }
+  .g-empty-note { padding: 9px 16px; font-size: 12px; color: var(--ink-soft); font-style: italic; }
+
+  .empty { padding: 48px 24px; text-align: center; color: var(--ink-soft); }
+  .empty h3 { font-family: var(--disp); color: var(--ink); margin: 0 0 6px; }
+
+  .hint { margin-top: 12px; font-size: 12px; color: var(--ink-soft); }
+  .hint b { color: var(--ink); font-weight: 600; }
+  .savedot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); margin-right: 5px; vertical-align: middle; }
+
+  @media (max-width: 720px) {
+    .kpis { grid-template-columns: repeat(2, 1fr); }
+    .g-row { grid-template-columns: 150px 1fr; }
+    .g-lab { padding: 0 10px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="mark">RS</div>
+      <div>
+        <h1>Prosjektoversikt</h1>
+        <p>R. Samdal Snekkeri · Kontraktsfestede jobber &amp; fremdrift</p>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--ink-soft)"><span class="savedot"></span><span id="saveMsg">Lagres automatisk</span></div>
+  </header>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="toolbar">
+    <div class="tabs">
+      <button id="tabTable" class="on" onclick="setView('table')">Tabell</button>
+      <button id="tabGantt" onclick="setView('gantt')">Tidslinje</button>
+    </div>
+    <div class="spacer"></div>
+    <div class="ctl">
+      <label for="filter">Status</label>
+      <select id="filter" class="pick" onchange="render()">
+        <option value="alle">Alle</option>
+        <option value="Planlagt">Planlagt</option>
+        <option value="Pågår">Pågår</option>
+        <option value="Fullført">Fullført</option>
+        <option value="Forsinket">Forsinket</option>
+      </select>
+    </div>
+    <div class="ctl">
+      <label for="sort">Sorter</label>
+      <select id="sort" class="pick" onchange="render()">
+        <option value="nr">Nummer</option>
+        <option value="start">Startdato</option>
+        <option value="sum">Kontraktssum</option>
+        <option value="status">Status</option>
+        <option value="kunde">Kunde</option>
+      </select>
+    </div>
+    <button class="btn" onclick="exportCSV()">Eksporter CSV</button>
+    <button class="btn ghost" onclick="resetData()" title="Tilbakestill til original prosjektliste">Tilbakestill</button>
+  </div>
+
+  <div id="tableView" class="card">
+    <div class="tbl-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:56px">Nr</th>
+            <th style="min-width:150px">Kunde</th>
+            <th style="min-width:180px">Adresse</th>
+            <th style="width:130px">Ansvarlig</th>
+            <th style="width:140px;text-align:right">Kontraktssum</th>
+            <th style="width:140px">Start</th>
+            <th style="width:140px">Slutt</th>
+            <th style="width:130px">Status</th>
+            <th style="width:36px"></th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+        <tfoot>
+          <tr><td colspan="9"><button class="addrow" onclick="addRow()">+ Nytt prosjekt</button></td></tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+
+  <div id="ganttView" class="card" style="display:none">
+    <div class="gantt-head">
+      <h2>Fremdriftsplan</h2>
+      <div class="legend">
+        <span><i style="background:var(--slate)"></i>Planlagt</span>
+        <span><i style="background:var(--amber)"></i>Pågår</span>
+        <span><i style="background:var(--green)"></i>Fullført</span>
+        <span><i style="background:var(--red)"></i>Forsinket</span>
+      </div>
+    </div>
+    <div id="ganttBody"></div>
+  </div>
+
+  <p class="hint">
+    <b>Tips:</b> Klikk rett i cellene for å fylle inn kontraktssum og datoer. Prosjekter med både start- og sluttdato vises automatisk i tidslinjen. Alt du fyller inn lagres i nettleseren, så listen er der neste gang du åpner panelet.
+  </p>
+</div>
+
+<script>
+const TEAM = ['Øyvin', 'Marcel', 'Roar', 'Nick', 'Roger'];
+const STATUSES = ['Planlagt', 'Pågår', 'Fullført', 'Forsinket'];
+const KEY = 'rss_prosjekter_v1';
+
+const SEED = [
+  { nr:'825', kunde:'Eirik Ramlo',            adresse:'Anders Hovdens veg 5 C' },
+  { nr:'827', kunde:'Margareth Selsås',       adresse:'Øvre Skoglykkja 28' },
+  { nr:'828', kunde:'Emil Løvseth',           adresse:'Arnenvegen 7' },
+  { nr:'829', kunde:'Don Ransi',              adresse:'Røddebakken 71' },
+  { nr:'831', kunde:'Esten Gagnås',           adresse:'Vigdalsvegen 522, Buvika' },
+  { nr:'837', kunde:'Pia Rande',              adresse:'Vestre Rosten 1F, Heimdal' },
+  { nr:'838', kunde:'Ellen Synnøve Skilbred', adresse:'Martin Stokkens vei 110' },
+  { nr:'839', kunde:'Herman Olafsen',         adresse:'Dorodal vegen 437, Fannrem' },
+  { nr:'840', kunde:'Nicoline',               adresse:'Lavamoen 38, Verdal' },
+  { nr:'841', kunde:'Merethe Dybvik Løfald',  adresse:'Ospnesveien 21, Bjugn' },
+  { nr:'842', kunde:'Kako Eken',              adresse:'Orkdalsveien 54B, Orkanger' },
+  { nr:'843', kunde:'Jo Sverre Helgemo',      adresse:'Grinnisvegen 226, Lundamo' },
+  { nr:'844', kunde:'Dan Moran',              adresse:'Teglbrennervegen 7b' },
+  { nr:'845', kunde:'Lena-Birgitta Borch Lia',adresse:'Inge Krokannsveg 2B, Trondheim' },
+  { nr:'846', kunde:'Krister Trondsen',       adresse:'Smiloftstykket 2, Trondheim' },
+  { nr:'847', kunde:'Ingeborg Kjerstad',      adresse:'Lundadalsvegen 81, Lundamo' },
+  { nr:'848', kunde:'Bernt Myhre',            adresse:'Øvre Bergssvingen 12' },
+  { nr:'849', kunde:'Rune Folgerø',           adresse:'Skåveien 11, Støren' },
+  { nr:'850', kunde:'Hans Are Solem',         adresse:'Hammerstranda 40, Buvika' },
+  { nr:'851', kunde:'Elisabeth Utnes',        adresse:'Reidar Raanes veg 15, Ranheim' },
+  { nr:'852', kunde:'Helge Wilhelm Schroeder',adresse:'Lykkjvegen 28, Ler' },
+].map(p => ({ ansvarlig:'', sum:null, start:'', slutt:'', status:'Planlagt', ...p }));
+
+let data = [];
+let view = 'table';
+
+/* ---------- persistence ---------- */
+async function load() {
+  try {
+    if (window.storage) {
+      const r = await window.storage.get(KEY);
+      if (r && r.value) { data = JSON.parse(r.value); return; }
+    }
+  } catch (e) {}
+  data = SEED.map(p => ({ ...p }));
+}
+let saveTimer = null;
+async function save() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    try {
+      if (window.storage) {
+        await window.storage.set(KEY, JSON.stringify(data));
+        flash('Lagret ' + new Date().toLocaleTimeString('nb-NO', {hour:'2-digit', minute:'2-digit'}));
+      } else {
+        flash('Lagret (kun denne økten)');
+      }
+    } catch (e) { flash('Kunne ikke lagre'); }
+  }, 350);
+}
+function flash(msg) {
+  const el = document.getElementById('saveMsg');
+  el.textContent = msg;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.textContent = 'Lagres automatisk'; }, 2500);
+}
+
+/* ---------- helpers ---------- */
+const fmtKr = n => (n === null || n === '' || isNaN(n)) ? '—' : Number(n).toLocaleString('nb-NO') + ' kr';
+const parseKr = s => { const n = parseFloat(String(s).replace(/[^\d.-]/g, '')); return isNaN(n) ? null : n; };
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function update(i, field, val) {
+  data[i][field] = val;
+  save();
+  renderKpis();
+  if (view === 'gantt') renderGantt();
+  if (field === 'sum' || field === 'status' || field === 'start') { /* re-render row-affecting */ }
+}
+
+/* ---------- KPI ---------- */
+function renderKpis() {
+  const total = data.reduce((s, p) => s + (Number(p.sum) || 0), 0);
+  const withSum = data.filter(p => Number(p.sum) > 0).length;
+  const c = s => data.filter(p => p.status === s).length;
+  const el = document.getElementById('kpis');
+  el.innerHTML = `
+    <div class="kpi"><div class="lab">Prosjekter</div><div class="val">${data.length}</div><div class="sub">kontraktsfestede jobber</div></div>
+    <div class="kpi accent"><div class="lab">Total kontraktssum</div><div class="val">${total ? total.toLocaleString('nb-NO') : '0'} kr</div><div class="sub">${withSum} av ${data.length} med beløp</div></div>
+    <div class="kpi"><div class="lab">Pågår nå</div><div class="val">${c('Pågår')}</div><div class="sub">aktive byggeplasser</div></div>
+    <div class="kpi"><div class="lab">Fullført</div><div class="val">${c('Fullført')}</div><div class="sub">${c('Forsinket')} forsinket · ${c('Planlagt')} planlagt</div></div>`;
+}
+
+/* ---------- sorting ---------- */
+function sorted() {
+  const key = document.getElementById('sort').value;
+  const f = document.getElementById('filter').value;
+  let rows = data.map((p, i) => ({ p, i }));
+  if (f !== 'alle') rows = rows.filter(r => r.p.status === f);
+  const cmp = {
+    nr: (a, b) => (a.p.nr || '').localeCompare(b.p.nr || '', 'nb', {numeric:true}),
+    kunde: (a, b) => (a.p.kunde || '').localeCompare(b.p.kunde || '', 'nb'),
+    sum: (a, b) => (Number(b.p.sum)||0) - (Number(a.p.sum)||0),
+    status: (a, b) => STATUSES.indexOf(a.p.status) - STATUSES.indexOf(b.p.status),
+    start: (a, b) => (a.p.start || '9999').localeCompare(b.p.start || '9999'),
+  }[key];
+  rows.sort(cmp);
+  return rows;
+}
+
+/* ---------- table ---------- */
+function renderTable() {
+  const tb = document.getElementById('tbody');
+  const rows = sorted();
+  if (!rows.length) { tb.innerHTML = `<tr><td colspan="9" class="empty"><h3>Ingen prosjekter i dette filteret</h3><p>Bytt status-filter eller legg til et nytt prosjekt.</p></td></tr>`; return; }
+  tb.innerHTML = rows.map(({ p, i }) => `
+    <tr>
+      <td class="nr">${esc(p.nr)}</td>
+      <td><input class="cell-in" value="${esc(p.kunde)}" placeholder="Kundenavn" oninput="update(${i},'kunde',this.value)"></td>
+      <td class="adr"><input class="cell-in" value="${esc(p.adresse)}" placeholder="Adresse" oninput="update(${i},'adresse',this.value)"></td>
+      <td>
+        <select class="cell-in" onchange="update(${i},'ansvarlig',this.value)">
+          <option value=""${p.ansvarlig?'':' selected'}>Ikke tildelt</option>
+          ${TEAM.map(t => `<option${p.ansvarlig===t?' selected':''}>${t}</option>`).join('')}
+        </select>
+      </td>
+      <td><input class="cell-in num" inputmode="numeric" value="${p.sum!==null&&p.sum!==''?Number(p.sum).toLocaleString('nb-NO'):''}" placeholder="0 kr"
+           onfocus="this.value=(${p.sum!==null&&p.sum!==''?p.sum:''}===''?'':'${p.sum??''}')"
+           onblur="const v=parseKr(this.value); update(${i},'sum',v); this.value=v!==null?v.toLocaleString('nb-NO'):'';"></td>
+      <td><input type="date" class="cell-in date" value="${esc(p.start)}" onchange="update(${i},'start',this.value)"></td>
+      <td><input type="date" class="cell-in date" value="${esc(p.slutt)}" onchange="update(${i},'slutt',this.value)"></td>
+      <td>
+        <span class="st-wrap">
+          <span class="st-dot dot-${p.status}"></span>
+          <select class="statuspick st-${p.status}" onchange="update(${i},'status',this.value); renderTable();">
+            ${STATUSES.map(s => `<option${p.status===s?' selected':''}>${s}</option>`).join('')}
+          </select>
+        </span>
+      </td>
+      <td><button class="del" title="Fjern prosjekt" onclick="removeRow(${i})">×</button></td>
+    </tr>`).join('');
+}
+
+function addRow() {
+  const maxNr = data.reduce((m, p) => Math.max(m, parseInt(p.nr) || 0), 0);
+  data.push({ nr: String(maxNr + 1), kunde:'', adresse:'', ansvarlig:'', sum:null, start:'', slutt:'', status:'Planlagt' });
+  save(); render();
+}
+function removeRow(i) {
+  if (confirm('Fjerne prosjekt ' + (data[i].nr || '') + (data[i].kunde ? ' – ' + data[i].kunde : '') + '?')) {
+    data.splice(i, 1); save(); render();
+  }
+}
+function resetData() {
+  if (confirm('Tilbakestille til den opprinnelige lista med 21 prosjekter? Alt du har fylt inn (beløp, datoer, status) forsvinner.')) {
+    data = SEED.map(p => ({ ...p })); save(); render();
+  }
+}
+
+/* ---------- gantt ---------- */
+function renderGantt() {
+  const wrap = document.getElementById('ganttBody');
+  const f = document.getElementById('filter').value;
+  let items = data.filter(p => p.start && p.slutt && p.start <= p.slutt);
+  if (f !== 'alle') items = items.filter(p => p.status === f);
+  const skipped = data.filter(p => !(p.start && p.slutt)).length;
+
+  if (!items.length) {
+    wrap.innerHTML = `<div class="empty"><h3>Ingen datoer lagt inn ennå</h3><p>Fyll inn <b>start-</b> og <b>sluttdato</b> i tabellen, så tegnes prosjektene opp her som en fremdriftsplan.</p></div>`;
+    return;
+  }
+
+  items.sort((a, b) => a.start.localeCompare(b.start));
+  const dates = items.flatMap(p => [p.start, p.slutt]).sort();
+  let min = new Date(dates[0]);
+  let max = new Date(dates[dates.length - 1]);
+  min = new Date(min.getFullYear(), min.getMonth(), 1);
+  max = new Date(max.getFullYear(), max.getMonth() + 1, 0);
+  const today = new Date(); today.setHours(0,0,0,0);
+  if (today < min) min = new Date(today.getFullYear(), today.getMonth(), 1);
+  if (today > max) max = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+  const DAY = 86400000;
+  const totalDays = Math.max(1, Math.round((max - min) / DAY) + 1);
+  const pxDay = Math.max(4.2, Math.min(11, 1200 / totalDays));
+  const trackW = Math.round(totalDays * pxDay);
+  const xOf = d => Math.round((new Date(d) - min) / DAY * pxDay);
+
+  const MONTHS = ['jan','feb','mar','apr','mai','jun','jul','aug','sep','okt','nov','des'];
+  let months = [], cur = new Date(min);
+  while (cur <= max) {
+    const start = new Date(cur.getFullYear(), cur.getMonth(), 1);
+    const x = xOf(start.toISOString().slice(0,10));
+    months.push({ x, label: MONTHS[cur.getMonth()] + ' ’' + String(cur.getFullYear()).slice(2) });
+    cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+  }
+  const grid = months.map(m => `<div class="gridline" style="left:${m.x}px"></div>`).join('');
+  const monthHead = months.map(m => `<div class="month-cell" style="left:${m.x}px"><span class="month-lab">${m.label}</span></div>`).join('');
+  const todayX = xOf(today.toISOString().slice(0,10));
+  const todayEl = (todayX >= 0 && todayX <= trackW) ? `<div class="today" style="left:${todayX}px"><span class="tlab">I dag</span></div>` : '';
+
+  const headRow = `
+    <div class="g-row">
+      <div class="g-lab headlab">Prosjekt</div>
+      <div class="g-track-head" style="width:${trackW}px">${monthHead}${todayEl ? '<div class="today" style="left:'+todayX+'px"></div>' : ''}</div>
+    </div>`;
+
+  const rows = items.map(p => {
+    const x = xOf(p.start), w = Math.max(14, xOf(p.slutt) - x);
+    const durDays = Math.round((new Date(p.slutt) - new Date(p.start)) / DAY) + 1;
+    const sumTxt = Number(p.sum) > 0 ? `<span class="sum">${Number(p.sum).toLocaleString('nb-NO')} kr</span>` : '';
+    const tip = `${p.nr} ${p.kunde}\n${p.adresse}\n${fmtDate(p.start)} – ${fmtDate(p.slutt)} (${durDays} dager)\n${fmtKr(p.sum)} · ${p.status}${p.ansvarlig?' · '+p.ansvarlig:''}`;
+    return `
+      <div class="g-row">
+        <div class="g-lab"><span class="k">${esc(p.kunde || '—')}</span><span class="n">${esc(p.nr)}${p.ansvarlig?' · '+esc(p.ansvarlig):''}</span></div>
+        <div class="g-track" style="width:${trackW}px">
+          ${grid}${todayEl}
+          <div class="bar bar-${p.status}" style="left:${x}px;width:${w}px" title="${esc(tip)}">${esc(p.kunde||p.nr)}${sumTxt}</div>
+        </div>
+      </div>`;
+  }).join('');
+
+  const note = skipped ? `<div class="g-empty-note">${skipped} prosjekt${skipped>1?'er':''} vises ikke – mangler start- eller sluttdato.</div>` : '';
+  wrap.innerHTML = `<div class="gantt-scroll"><div class="gantt">${headRow}${rows}</div></div>${note}`;
+}
+
+function fmtDate(d) { if (!d) return '—'; const p = d.split('-'); return `${p[2]}.${p[1]}.${p[0]}`; }
+
+/* ---------- view switching ---------- */
+function setView(v) {
+  view = v;
+  document.getElementById('tabTable').classList.toggle('on', v === 'table');
+  document.getElementById('tabGantt').classList.toggle('on', v === 'gantt');
+  document.getElementById('tableView').style.display = v === 'table' ? '' : 'none';
+  document.getElementById('ganttView').style.display = v === 'gantt' ? '' : 'none';
+  render();
+}
+function render() { renderKpis(); if (view === 'table') renderTable(); else renderGantt(); }
+
+/* ---------- csv ---------- */
+function exportCSV() {
+  const head = ['Nr','Kunde','Adresse','Ansvarlig','Kontraktssum','Start','Slutt','Status'];
+  const esc2 = s => `"${String(s ?? '').replace(/"/g, '""')}"`;
+  const lines = [head.join(';')];
+  data.forEach(p => lines.push([p.nr, p.kunde, p.adresse, p.ansvarlig, p.sum ?? '', p.start, p.slutt, p.status].map(esc2).join(';')));
+  const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'prosjektoversikt.csv';
+  a.click();
+}
+
+/* ---------- init ---------- */
+(async () => { await load(); renderKpis(); renderTable(); })();
+</script>

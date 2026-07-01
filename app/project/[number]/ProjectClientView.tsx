@@ -152,7 +152,7 @@ export default function ProjectClientView({
                 </span>
               </div>
               <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[12px] text-muted-foreground">
-                {(project.assigned_employees?.length ?? 0) > 0 && project.assigned_employees!.map(emp => <span key={emp} className="flex items-center gap-1.5"><span className="rounded-full" style={{ width: 6, height: 6, backgroundColor: EMPLOYEE_COLORS[emp] || "#888" }} />{emp}</span>)}
+                {project.assigned && <span className="flex items-center gap-1.5"><span className="rounded-full" style={{ width: 6, height: 6, backgroundColor: EMPLOYEE_COLORS[project.assigned] || "#888" }} />{project.assigned}</span>}
                 {project.customer_name && <span>Kunde: {project.customer_name}</span>}
                 {project.start_date && <span>Start: {formatDate(project.start_date)}</span>}
                 {project.estimated_end_date && <span>Slutt: {project.end_date_defaulted ? "Ikke estimert" : formatDate(project.estimated_end_date)}</span>}

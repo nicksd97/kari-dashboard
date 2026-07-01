@@ -4,13 +4,13 @@ import type { Project, Lead, Checkin, Deviation, TimelineEntry, MessageFeedEntry
 const COMPANY_ID = "a12dfbf0-a9d6-4786-95fe-6f1678d9d980";
 
 const DEMO_PROJECTS: Project[] = [
-  { project_number: "815", name: "Jan Erik Peis", status: "pågår", customer_name: "Jan Erik Peis", start_date: "2026-03-10", estimated_end_date: "2026-04-15", agreed_price: 185000, assigned_employees: ["Roar"] },
-  { project_number: "767", name: "Stavnevegen 31", status: "pågår", customer_name: "Stavnevegen 31", start_date: "2026-03-01", estimated_end_date: "2026-04-20", agreed_price: 320000, assigned_employees: ["Andrii"] },
-  { project_number: "790", name: "Molnes Kalkulering", status: "tilbud sendt", customer_name: "Molnes", start_date: "2026-04-01", estimated_end_date: "2026-05-15", agreed_price: 450000, assigned_employees: ["Roar"], dependency: "815" },
-  { project_number: "802", name: "Vika Hustad Isolasjon", status: "pågår", customer_name: "Vika Hustad", start_date: "2026-03-20", estimated_end_date: "2026-04-10", agreed_price: 95000, assigned_employees: ["Roar"] },
-  { project_number: "810", name: "Byåsen Betong", status: "ferdig", customer_name: "Byåsen", start_date: "2026-03-01", estimated_end_date: "2026-03-26", agreed_price: 125000, assigned_employees: ["Marci"] },
-  { project_number: "820", name: "Adapteo Moduler", status: "pågår", customer_name: "Adapteo", start_date: "2026-04-05", estimated_end_date: "2026-05-30", agreed_price: 780000, assigned_employees: ["Andrii"], dependency: "767" },
-  { project_number: "825", name: "Garage Trondheim", status: "befart", customer_name: "Petter Sørensen" },
+  { project_number: "815", name: "Jan Erik Peis", status: "pagaende", customer_name: "Jan Erik Peis", start_date: "2026-03-10", estimated_end_date: "2026-04-15", agreed_price: 185000, assigned: "Roar" },
+  { project_number: "767", name: "Stavnevegen 31", status: "pagaende", customer_name: "Stavnevegen 31", start_date: "2026-03-01", estimated_end_date: "2026-04-20", agreed_price: 320000, assigned: "Andrii" },
+  { project_number: "790", name: "Molnes Kalkulering", status: "planlegging", customer_name: "Molnes", start_date: "2026-04-01", estimated_end_date: "2026-05-15", agreed_price: 450000, assigned: "Roar", dependency: "815" },
+  { project_number: "802", name: "Vika Hustad Isolasjon", status: "pagaende", customer_name: "Vika Hustad", start_date: "2026-03-20", estimated_end_date: "2026-04-10", agreed_price: 95000, assigned: "Roar" },
+  { project_number: "810", name: "Byåsen Betong", status: "ferdig", customer_name: "Byåsen", start_date: "2026-03-01", estimated_end_date: "2026-03-26", agreed_price: 125000, assigned: "Marci" },
+  { project_number: "820", name: "Adapteo Moduler", status: "materialer", customer_name: "Adapteo", start_date: "2026-04-05", estimated_end_date: "2026-05-30", agreed_price: 780000, assigned: "Andrii", dependency: "767" },
+  { project_number: "825", name: "Garage Trondheim", status: "innkommende", customer_name: "Petter Sørensen" },
 ];
 
 const DEMO_LEADS: Lead[] = [
@@ -199,6 +199,18 @@ export async function fetchLiveProjects(): Promise<Project[]> {
         // Default end to start if still missing
         if (!endDate && startDate) endDate = startDate;
 
+        let notes = "";
+        let archived = false;
+        if (p.description) {
+          try {
+            const parsed = JSON.parse(String(p.description));
+            notes = parsed.notes || "";
+            archived = !!parsed.archived;
+          } catch {
+            notes = String(p.description);
+          }
+        }
+
         return {
           project_number: pn,
           name: String(p.name || ""),
@@ -209,11 +221,11 @@ export async function fetchLiveProjects(): Promise<Project[]> {
           estimated_end_date: endDate,
           end_date_defaulted: !p.estimated_end_date && !ciDates && !!p.start_date,
           agreed_price: p.agreed_price ? Number(p.agreed_price) : undefined,
-          assigned_employees: Array.isArray(p.assigned_employees) && (p.assigned_employees as string[]).length > 0 ? (p.assigned_employees as string[]) : (assignedName ? [assignedName] : []),
+          assigned: assignedName,
           customer_email: p.customer_email ? String(p.customer_email) : undefined,
           customer_phone: p.customer_phone ? String(p.customer_phone) : undefined,
-          notes: p.notes ? String(p.notes) : undefined,
-          archived: p.archived === true,
+          notes,
+          archived,
           dependency: p.dependency ? String(p.dependency) : undefined,
         } as Project;
       })

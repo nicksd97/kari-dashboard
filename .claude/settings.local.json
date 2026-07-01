@@ -23,7 +23,22 @@
       "Bash(mkdir -p app/api/graph/files/[itemId]/content)",
       "Bash(grep -n \"inline\" app/api/graph/files/[itemId]/content/route.ts)",
       "Bash(grep -n \"inline=true\" app/project/[number]/page.tsx)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "mcp__plugin_claude-mem_mcp-search__search",
+      "mcp__plugin_claude-mem_mcp-search__get_observations",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(ssh -i \"$env:USERPROFILE\\\\.ssh\\\\id_ed25519\" -o StrictHostKeyChecking=no -o BatchMode=yes openclaw@20.82.236.153 \"echo OK; ls ~ | head -20\")",
+      "PowerShell(ssh-add *)",
+      "PowerShell(Get-Content *)",
+      "PowerShell(ssh -i \"$env:USERPROFILE\\\\.ssh\\\\id_ed25519\" -v -o BatchMode=yes openclaw@20.82.236.153 \"echo OK\" 2>&1 | Select-String \"Offering|Authentications|Permission|debug1: Trying|debug1: Server\" | Select-Object -First 20)",
+      "mcp__plugin_claude-mem_mcp-search__smart_outline",
+      "PowerShell(Get-Content \"C:\\\\Users\\\\NickDavidson\\\\kari-dashboard\\\\lib\\\\data.ts\" | Select-Object -Index \\(47..60\\))",
+      "PowerShell(Get-Content \"C:\\\\Users\\\\NickDavidson\\\\kari-dashboard\\\\app\\\\components\\\\Timeline.tsx\" | Select-Object -Index \\(85..135\\))",
+      "PowerShell(Get-Content \"C:\\\\Users\\\\NickDavidson\\\\kari-dashboard\\\\app\\\\components\\\\Timeline.tsx\" | Select-Object -Index \\(88..96\\))",
+      "PowerShell(Get-Content \"C:\\\\Users\\\\NickDavidson\\\\kari-dashboard\\\\app\\\\components\\\\Dashboard.tsx\" | Select-Object -Index \\(260..285\\))",
+      "PowerShell(Get-Content \"C:\\\\Users\\\\NickDavidson\\\\kari-dashboard\\\\app\\\\components\\\\Dashboard.tsx\" | Select-Object -Index \\(240..275\\))",
+      "PowerShell(Get-Content \"C:\\\\Users\\\\NickDavidson\\\\kari-dashboard\\\\app\\\\components\\\\Dashboard.tsx\" | Select-Object -Index \\(200..240\\))",
+      "PowerShell(Get-Content \"C:\\\\Users\\\\NickDavidson\\\\kari-dashboard\\\\app\\\\components\\\\Dashboard.tsx\" | Select-Object -Index \\(140..200\\))"
     ]
   }
 }
