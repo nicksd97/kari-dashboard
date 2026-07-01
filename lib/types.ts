@@ -183,3 +183,22 @@ export const SEVERITY_COLORS: Record<string, { bg: string; fg: string }> = {
   medium: { bg: "#FAC775", fg: "#7a4a00" },
   high: { bg: "#F5C4B3", fg: "#8a1a00" },
 };
+
+export interface Prosjekt {
+  id: string
+  nr: string
+  kunde: string
+  adresse: string
+  ansvarlig: string
+  sum: number | null
+  start_dato: string | null
+  slutt_dato: string | null
+  status: 'Planlagt' | 'Pågår' | 'Fullført' | 'Forsinket'
+  created_at: string
+  updated_at: string
+}
+
+export const PROSJEKT_STATUSES = ['Planlagt', 'Pågår', 'Fullført', 'Forsinket'] as const
+export type ProsjektStatus = typeof PROSJEKT_STATUSES[number]
+
+export const PROSJEKT_TEAM = ['Øyvin', 'Marcel', 'Roar', 'Nick', 'Roger'] as const
