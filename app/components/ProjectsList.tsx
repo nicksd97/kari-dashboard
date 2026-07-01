@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
@@ -14,11 +14,11 @@ interface ProjectsListProps {
 
 const STATUS_FILTERS = [
   { key: "alle", label: "Alle" },
-  { key: "pagaende", label: "Pågående" },
-  { key: "planlegging", label: "Planlegging" },
-  { key: "materialer", label: "Materialer" },
-  { key: "innkommende", label: "Innkommende" },
-  { key: "venter kunde", label: "Venter kunde" },
+  { key: "pågår", label: "Pågår" },
+  { key: "befart", label: "Befart" },
+  { key: "tilbud sendt", label: "Tilbud sendt" },
+  { key: "vunnet", label: "Vunnet" },
+  { key: "tapt", label: "Tapt" },
   { key: "ferdig", label: "Ferdig" },
 ];
 
