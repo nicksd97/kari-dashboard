@@ -1,8 +1,8 @@
-@AGENTS.md
+﻿@AGENTS.md
 
 # Kari Dashboard — Project Rules
 
-*Last updated: 2026-04-13*
+*Last updated: 2026-07-01*
 
 ## Auto Plan-and-Execute Workflow
 
@@ -39,9 +39,24 @@ Every task follows this sequence. No exceptions.
 | `app/page.tsx` | Home — server-side fetch, passes data to Dashboard |
 | `app/components/` | All dashboard UI components (client) |
 | `app/project/[number]/` | Project detail route |
+| `app/prosjekter/` | Auth-protected contract overview (Project table, agreed_price) |
+| `app/login/` | Login page + server actions for Supabase Auth |
 | `app/api/graph/` | Microsoft Graph proxy routes (OneDrive) |
 | `lib/` | Data fetching, types, Supabase client, MS Graph helpers |
+| `lib/supabase-server.ts` | SSR Supabase client (Server Components, Server Actions) |
+| `lib/supabase-browser.ts` | Browser Supabase client (Client Components) |
+| `lib/supabase.ts` | Legacy anon client — used by main dashboard only |
+| `proxy.ts` | Route guard: redirects /prosjekter to /login if not authed |
 | `components/ui/` | Reusable shadcn-style primitives |
+| `supabase/prosjekter.sql` | SQL to add address column + seed 21 projects |
+
+## Auth
+
+- `/prosjekter` is behind Supabase Auth (email + password)
+- `proxy.ts` (Next.js 16 equivalent of middleware) handles redirects
+- Use `lib/supabase-server.ts` for all server-side auth checks
+- Use `lib/supabase-browser.ts` in Client Components that need auth
+- Users are created manually in Supabase Dashboard → Authentication → Users
 
 ## Environment Variables
 
