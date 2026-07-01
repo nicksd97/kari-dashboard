@@ -1,4 +1,4 @@
-'use server'
+﻿'use server'
 import { createClient } from '@/lib/supabase-server'
 import type { Project } from '@/lib/types'
 
@@ -33,7 +33,7 @@ export async function addProject(existing: Project[]): Promise<Project | null> {
       name: '',
       customer_name: '',
       address: '',
-      status: 'innkommende',
+      status: 'befart',
       company_id: COMPANY_ID,
     })
     .select()

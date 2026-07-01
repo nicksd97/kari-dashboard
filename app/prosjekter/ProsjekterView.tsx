@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
@@ -23,7 +23,7 @@ export default function ProsjekterView({ projects: initial, userEmail }: Props) 
 
   const totalSum = rows.reduce((s, p) => s + (p.agreed_price ?? 0), 0)
   const withSum = rows.filter(p => p.agreed_price != null).length
-  const active = rows.filter(p => p.status === 'pagaende').length
+  const active = rows.filter(p => p.status === 'pågår').length
   const done = rows.filter(p => p.status === 'ferdig').length
 
   const sorted = [...rows]
@@ -123,7 +123,7 @@ export default function ProsjekterView({ projects: initial, userEmail }: Props) 
           <div className="p-card" style={{ padding: '13px 16px' }}>
             <div style={{ fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', color: '#4a534f', fontWeight: 600 }}>Fullført</div>
             <div style={{ fontWeight: 700, fontSize: 24, marginTop: 4, letterSpacing: '-.5px', fontVariantNumeric: 'tabular-nums' }}>{done}</div>
-            <div style={{ fontSize: 11.5, color: '#4a534f', marginTop: 1 }}>{rows.filter(p => p.status === 'fakturering').length} fakturering · {rows.filter(p => p.status === 'planlegging').length} planlegging</div>
+            <div style={{ fontSize: 11.5, color: '#4a534f', marginTop: 1 }}>{rows.filter(p => p.status === 'tapt').length} tapt · {rows.filter(p => p.status === 'tilbud sendt').length} tilbud sendt</div>
           </div>
         </div>
 
