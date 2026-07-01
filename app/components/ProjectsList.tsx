@@ -14,7 +14,7 @@ interface ProjectsListProps {
 
 const STATUS_FILTERS = [
   { key: "alle", label: "Alle" },
-  { key: "pågår", label: "Pågår" },
+  { key: "pÃ¥gÃ¥r", label: "PÃ¥gÃ¥r" },
   { key: "befart", label: "Befart" },
   { key: "tilbud sendt", label: "Tilbud sendt" },
   { key: "vunnet", label: "Vunnet" },
@@ -82,7 +82,7 @@ export default function ProjectsList({ projects }: ProjectsListProps) {
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <input
           type="text"
-          placeholder="Søk prosjekt..."
+          placeholder="SÃ¸k prosjekt..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="rounded-lg px-3 py-2 text-[13px] outline-none w-full sm:w-56"
@@ -164,10 +164,10 @@ export default function ProjectsList({ projects }: ProjectsListProps) {
                   >
                     {STATUS_LABELS[p.status] || p.status}
                   </span>
-                  {p.assigned && (
+                  {(p.assigned_employees?.length ?? 0) > 0 && (
                     <span className="text-[11px] flex items-center gap-1 text-muted-foreground/70">
-                      <span className="rounded-full" style={{ width: 5, height: 5, backgroundColor: EMPLOYEE_COLORS[p.assigned] || "#888" }} />
-                      {p.assigned}
+                      <span className="rounded-full" style={{ width: 5, height: 5, backgroundColor: EMPLOYEE_COLORS[p.assigned_employees![0]] || "#888" }} />
+                      {p.assigned_employees![0]}
                     </span>
                   )}
                 </div>
@@ -180,10 +180,10 @@ export default function ProjectsList({ projects }: ProjectsListProps) {
                     {p.customer_name}
                   </span>
                 )}
-                {p.assigned && (
+                {(p.assigned_employees?.length ?? 0) > 0 && (
                   <span className="flex items-center gap-1.5 text-[12px] w-16 text-muted-foreground">
-                    <span className="rounded-full" style={{ width: 6, height: 6, backgroundColor: EMPLOYEE_COLORS[p.assigned] || "#888" }} />
-                    {p.assigned}
+                    <span className="rounded-full" style={{ width: 6, height: 6, backgroundColor: EMPLOYEE_COLORS[p.assigned_employees![0]] || "#888" }} />
+                    {p.assigned_employees![0]}
                   </span>
                 )}
                 {p.start_date && (

@@ -1,9 +1,9 @@
-﻿'use client'
-import { useState, useTransition } from 'react'
+'use client'
+import { useState, useTransition, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 import type { Project } from '@/lib/types'
-import { STATUS_LABELS, STATUS_COLORS_SOFT } from '@/lib/types'
+import { STATUS_LABELS, STATUS_COLORS_SOFT, EMPLOYEE_COLORS } from '@/lib/types'
 import { updateProject, deleteProject, addProject } from './actions'
 
 const TEAM = ['Øyvin', 'Marcel', 'Roar', 'Nick', 'Roger']
@@ -12,6 +12,71 @@ const STATUSES = Object.keys(STATUS_LABELS)
 interface Props {
   projects: Project[]
   userEmail: string
+}
+
+function EmployeeMultiSelect({ selected, onChange }: { selected: string[]; onChange: (v: string[]) => void }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    if (open) document.addEventListener('mousedown', onClickOutside)
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [open])
+
+  const dotColor = selected.length > 0 ? (EMPLOYEE_COLORS[selected[0]] || '#aaa') : '#aaa'
+  const labelText = selected.length === 0 ? 'Ikke tildelt'
+    : selected.length === 1 ? selected[0]
+    : selected[0] + ' +' + (selected.length - 1)
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        type="button"
+        className="p-input"
+        style={{ textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}
+        onClick={() => setOpen(o => !o)}
+      >
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, flex: 1, color: selected.length === 0 ? '#9aa09d' : '#191d1c' }}>
+          {selected.length > 0 && <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: dotColor, flexShrink: 0 }} />}
+          {labelText}
+        </span>
+        <span style={{ fontSize: 9, color: '#9aa09d', flexShrink: 0 }}>▼</span>
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', zIndex: 100, top: 'calc(100% + 4px)', left: 0,
+          background: '#fff', border: '1px solid #d9d6cd', borderRadius: 9,
+          boxShadow: '0 4px 16px rgba(0,0,0,.12)', minWidth: 160, padding: '5px 0'
+        }}>
+          {TEAM.map(emp => {
+            const checked = selected.includes(emp)
+            return (
+              <label key={emp} style={{
+                display: 'flex', alignItems: 'center', gap: 9,
+                padding: '7px 13px', cursor: 'pointer', fontSize: 13,
+                background: checked ? '#f2f8f7' : 'transparent',
+              }}>
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => {
+                    const next = checked ? selected.filter(e => e !== emp) : [...selected, emp]
+                    onChange(next)
+                  }}
+                  style={{ width: 14, height: 14, accentColor: '#1f4b4a' }}
+                />
+                <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: EMPLOYEE_COLORS[emp] || '#aaa' }} />
+                {emp}
+              </label>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function ProsjekterView({ projects: initial, userEmail }: Props) {
@@ -37,7 +102,7 @@ export default function ProsjekterView({ projects: initial, userEmail }: Props) 
       return 0
     })
 
-  function handleField(nr: string, field: string, value: string | number | null) {
+  function handleField(nr: string, field: string, value: string | number | string[] | null) {
     setRows(prev => prev.map(r => r.project_number === nr ? { ...r, [field]: value } : r))
     startTransition(() => updateProject(nr, field, value))
   }
@@ -48,10 +113,15 @@ export default function ProsjekterView({ projects: initial, userEmail }: Props) 
   }
 
   function exportCSV() {
-    const cols = ['Nr', 'Kunde', 'Adresse', 'Ansvarlig', 'Kontraktssum', 'Start', 'Slutt', 'Status']
-    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
+    const cols = ['Nr', 'Kunde', 'E-post', 'Telefon', 'Adresse', 'Ansvarlige', 'Kontraktssum', 'Start', 'Slutt', 'Status']
+    const esc = (v: unknown) => '"' + String(v ?? '').replace(/"/g, '""') + '"'
     const lines = [cols.join(';'), ...rows.map(p =>
-      [p.project_number, p.customer_name, p.address, p.assigned, p.agreed_price ?? '', p.start_date, p.estimated_end_date, STATUS_LABELS[p.status] ?? p.status].map(esc).join(';')
+      [
+        p.project_number, p.customer_name, p.customer_email, p.customer_phone,
+        p.address, (p.assigned_employees ?? []).join(', '),
+        p.agreed_price ?? '', p.start_date, p.estimated_end_date,
+        STATUS_LABELS[p.status] ?? p.status,
+      ].map(esc).join(';')
     )]
     const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' })
     const a = document.createElement('a')
@@ -66,12 +136,10 @@ export default function ProsjekterView({ projects: initial, userEmail }: Props) 
         .p-card { background:#fff; border:1px solid #e7e4db; border-radius:12px; box-shadow:0 1px 2px rgba(20,25,24,.06),0 8px 24px rgba(20,25,24,.06); }
         .p-th { font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:#4a534f; font-weight:600; padding:11px 12px; border-bottom:1.5px solid #d9d6cd; white-space:nowrap; background:#faf9f5; position:sticky; top:0; z-index:2; text-align:left; }
         .p-td { padding:4px 12px; border-bottom:1px solid #e7e4db; vertical-align:middle; }
-        .p-input { width:100%; border:1px solid transparent; background:transparent; border-radius:6px; padding:7px 8px; font-size:13.5px; color:#191d1c; font-family:inherit; }
+        .p-input { width:100%; border:1px solid transparent; background:transparent; border-radius:6px; padding:7px 8px; font-size:13.5px; color:#191d1c; font-family:inherit; box-sizing:border-box; }
         .p-input:hover { border-color:#d9d6cd; }
         .p-input:focus { outline:none; border-color:#1f4b4a; background:#fff; box-shadow:0 0 0 3px rgba(31,75,74,.10); }
         .p-input-num { text-align:right; font-variant-numeric:tabular-nums; }
-        .p-tab { font-size:13px; font-weight:600; color:#4a534f; border:0; background:transparent; padding:7px 15px; border-radius:7px; cursor:pointer; }
-        .p-tab.on { background:#1f4b4a; color:#fff; }
         .p-select { font-size:13px; color:#191d1c; background:#fff; border:1px solid #d9d6cd; border-radius:8px; padding:7px 11px; cursor:pointer; font-family:inherit; }
         .p-btn { font-size:13px; font-weight:600; color:#191d1c; background:#fff; border:1px solid #d9d6cd; border-radius:8px; padding:7px 13px; cursor:pointer; font-family:inherit; }
         .p-btn:hover { border-color:#1f4b4a; }
@@ -82,13 +150,11 @@ export default function ProsjekterView({ projects: initial, userEmail }: Props) 
         .p-del:hover { color:#c1483c; background:#f8dedb; }
         .p-nr { font-weight:600; color:#1f4b4a; font-variant-numeric:tabular-nums; }
         tbody tr:hover td { background:#faf9f4; }
-        .st-badge { border-radius:999px; padding:4px 11px; font-weight:600; font-size:12px; display:inline-block; }
         .p-st-pick { border:0; border-radius:999px; padding:5px 10px; font-weight:600; font-size:12px; cursor:pointer; appearance:none; font-family:inherit; }
       `}</style>
 
-      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '22px 20px 60px' }}>
+      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '22px 20px 60px' }}>
 
-        {/* Header */}
         <header style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', marginBottom: 18 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
             <div style={{ width: 42, height: 42, borderRadius: 10, background: '#1f4b4a', color: '#f2f0ea', display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: 18 }}>RS</div>
@@ -103,7 +169,6 @@ export default function ProsjekterView({ projects: initial, userEmail }: Props) 
           </div>
         </header>
 
-        {/* KPI strip */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 12, marginBottom: 16 }}>
           <div className="p-card" style={{ padding: '13px 16px' }}>
             <div style={{ fontSize: 11, letterSpacing: '.06em', textTransform: 'uppercase', color: '#4a534f', fontWeight: 600 }}>Prosjekter</div>
@@ -127,10 +192,9 @@ export default function ProsjekterView({ projects: initial, userEmail }: Props) 
           </div>
         </div>
 
-        {/* Toolbar */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
           <div style={{ fontSize: 13, color: '#4a534f' }}>
-            {filter !== 'alle' && <span style={{ fontWeight: 600, color: '#191d1c' }}>{sorted.length}</span>} {filter !== 'alle' ? 'prosjekter vises' : `${rows.length} prosjekter totalt`}
+            {filter !== 'alle' && <span style={{ fontWeight: 600, color: '#191d1c' }}>{sorted.length}</span>}{filter !== 'alle' ? ' prosjekter vises' : rows.length + ' prosjekter totalt'}
           </div>
           <div style={{ flex: 1 }} />
           <label style={{ fontSize: 12, color: '#4a534f', fontWeight: 500 }}>Status</label>
@@ -149,20 +213,21 @@ export default function ProsjekterView({ projects: initial, userEmail }: Props) 
           <button className="p-btn" onClick={exportCSV}>Eksporter CSV</button>
         </div>
 
-        {/* Table */}
         <div className="p-card" style={{ overflow: 'hidden' }}>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 960 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
               <thead>
                 <tr>
                   <th className="p-th" style={{ width: 56 }}>Nr</th>
-                  <th className="p-th" style={{ minWidth: 160 }}>Kunde</th>
-                  <th className="p-th" style={{ minWidth: 200 }}>Adresse</th>
-                  <th className="p-th" style={{ width: 130 }}>Ansvarlig</th>
-                  <th className="p-th" style={{ width: 155, textAlign: 'right' }}>Kontraktssum</th>
-                  <th className="p-th" style={{ width: 140 }}>Start</th>
-                  <th className="p-th" style={{ width: 140 }}>Slutt</th>
-                  <th className="p-th" style={{ width: 140 }}>Status</th>
+                  <th className="p-th" style={{ minWidth: 150 }}>Kunde</th>
+                  <th className="p-th" style={{ minWidth: 170 }}>E-post</th>
+                  <th className="p-th" style={{ width: 130 }}>Telefon</th>
+                  <th className="p-th" style={{ minWidth: 160 }}>Adresse</th>
+                  <th className="p-th" style={{ width: 145 }}>Ansvarlig</th>
+                  <th className="p-th" style={{ width: 145, textAlign: 'right' }}>Kontraktssum</th>
+                  <th className="p-th" style={{ width: 136 }}>Start</th>
+                  <th className="p-th" style={{ width: 136 }}>Slutt</th>
+                  <th className="p-th" style={{ width: 135 }}>Status</th>
                   <th className="p-th" style={{ width: 36 }} />
                 </tr>
               </thead>
@@ -173,18 +238,20 @@ export default function ProsjekterView({ projects: initial, userEmail }: Props) 
                     <td className="p-td">
                       <input className="p-input" defaultValue={p.customer_name ?? ''} onBlur={e => handleField(p.project_number, 'customer_name', e.target.value)} />
                     </td>
-                    <td className="p-td" style={{ color: '#4a534f', fontSize: 13 }}>
+                    <td className="p-td">
+                      <input className="p-input" type="email" defaultValue={p.customer_email ?? ''} placeholder="e-post" onBlur={e => handleField(p.project_number, 'customer_email', e.target.value)} />
+                    </td>
+                    <td className="p-td">
+                      <input className="p-input" type="tel" defaultValue={p.customer_phone ?? ''} placeholder="tlf" onBlur={e => handleField(p.project_number, 'customer_phone', e.target.value)} />
+                    </td>
+                    <td className="p-td">
                       <input className="p-input" defaultValue={p.address ?? ''} placeholder="Adresse" onBlur={e => handleField(p.project_number, 'address', e.target.value)} />
                     </td>
                     <td className="p-td">
-                      <select
-                        className="p-input"
-                        defaultValue={p.assigned ?? ''}
-                        onChange={e => handleField(p.project_number, 'assigned', e.target.value)}
-                      >
-                        <option value="">Ikke tildelt</option>
-                        {TEAM.map(t => <option key={t}>{t}</option>)}
-                      </select>
+                      <EmployeeMultiSelect
+                        selected={p.assigned_employees ?? []}
+                        onChange={emps => handleField(p.project_number, 'assigned_employees', emps)}
+                      />
                     </td>
                     <td className="p-td">
                       <input
@@ -200,10 +267,10 @@ export default function ProsjekterView({ projects: initial, userEmail }: Props) 
                       />
                     </td>
                     <td className="p-td">
-                      <input type="date" className="p-input" style={{ minWidth: 130 }} defaultValue={p.start_date ?? ''} onChange={e => handleField(p.project_number, 'start_date', e.target.value || null)} />
+                      <input type="date" className="p-input" style={{ minWidth: 120 }} defaultValue={p.start_date ?? ''} onChange={e => handleField(p.project_number, 'start_date', e.target.value || null)} />
                     </td>
                     <td className="p-td">
-                      <input type="date" className="p-input" style={{ minWidth: 130 }} defaultValue={p.estimated_end_date ?? ''} onChange={e => handleField(p.project_number, 'estimated_end_date', e.target.value || null)} />
+                      <input type="date" className="p-input" style={{ minWidth: 120 }} defaultValue={p.estimated_end_date ?? ''} onChange={e => handleField(p.project_number, 'estimated_end_date', e.target.value || null)} />
                     </td>
                     <td className="p-td">
                       <select
@@ -217,17 +284,17 @@ export default function ProsjekterView({ projects: initial, userEmail }: Props) 
                     </td>
                     <td className="p-td">
                       <button className="p-del" onClick={() => {
-                        if (confirm(`Fjerne prosjekt ${p.project_number} – ${p.customer_name}?`)) {
+                        if (confirm('Fjerne prosjekt ' + p.project_number + ' - ' + p.customer_name + '?')) {
                           setRows(prev => prev.filter(r => r.project_number !== p.project_number))
                           startTransition(() => deleteProject(p.project_number))
                         }
-                      }}>×</button>
+                      }}>x</button>
                     </td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
-                <tr><td colSpan={9} style={{ padding: 12 }}>
+                <tr><td colSpan={11} style={{ padding: 12 }}>
                   <button className="p-addrow" onClick={() => {
                     startTransition(async () => {
                       const newRow = await addProject(rows)

@@ -1,4 +1,4 @@
-﻿export interface Project {
+export interface Project {
   project_number: string;
   name: string;
   status: string;
@@ -8,7 +8,9 @@
   estimated_end_date?: string;
   end_date_defaulted?: boolean;
   agreed_price?: number;
-  assigned?: string;
+  assigned_employees?: string[];
+  customer_email?: string;
+  customer_phone?: string;
   dependency?: string;
 }
 

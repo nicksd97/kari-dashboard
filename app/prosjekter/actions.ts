@@ -1,10 +1,10 @@
-﻿'use server'
+'use server'
 import { createClient } from '@/lib/supabase-server'
 import type { Project } from '@/lib/types'
 
 const COMPANY_ID = 'a12dfbf0-a9d6-4786-95fe-6f1678d9d980'
 
-export async function updateProject(projectNumber: string, field: string, value: string | number | null) {
+export async function updateProject(projectNumber: string, field: string, value: string | number | string[] | null) {
   const supabase = await createClient()
   await supabase
     .from('projects')

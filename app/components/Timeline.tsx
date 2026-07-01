@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import Link from "next/link";
@@ -18,7 +18,7 @@ interface TimelineProps {
   timelineEntries?: TimelineEntry[];
 }
 
-// A row in the timeline — either from check-in data or project assignment fallback
+// A row in the timeline ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â either from check-in data or project assignment fallback
 interface TimelineRow {
   employee: string;
   project: Project;
@@ -112,17 +112,17 @@ function getBarStyle(p: Project, today: string): BarStyle {
 
 type StageKey = 1 | 2 | 3;
 
-const STAGE_LABELS: Record<StageKey, string> = { 1: "Oppstart", 2: "Pågående", 3: "Avslutning" };
+const STAGE_LABELS: Record<StageKey, string> = { 1: "Oppstart", 2: "PÃƒÆ’Ã‚Â¥gÃƒÆ’Ã‚Â¥ende", 3: "Avslutning" };
 
 const STAGE_ITEMS: Record<StageKey, string[]> = {
   1: ["Kontrakt signert", "Prosjektmappe opprettet", "Materialliste klar", "Planner-oppgave opprettet", "Kickoff med team"],
-  2: ["Vernerunde gjennomført", "Materialer bestilt/levert", "Kvalitetskontroll underveis", "Timer og kostnader loggført", "Oppfølging med kunde"],
+  2: ["Vernerunde gjennomfÃƒÆ’Ã‚Â¸rt", "Materialer bestilt/levert", "Kvalitetskontroll underveis", "Timer og kostnader loggfÃƒÆ’Ã‚Â¸rt", "OppfÃƒÆ’Ã‚Â¸lging med kunde"],
   3: ["Kvalitetskontroll ferdig", "Ferdigstillelse-sjekkliste", "FDV-dokumentasjon levert", "Sluttfaktura sendt", "Prosjekt lukket i Planner"],
 };
 
 function getActiveStage(status: string): StageKey {
   if (status === "befart" || status === "tilbud sendt") return 1;
-  if (status === "vunnet" || status === "pågår") return 2;
+  if (status === "vunnet" || status === "pÃƒÆ’Ã‚Â¥gÃƒÆ’Ã‚Â¥r") return 2;
   return 3;
 }
 
@@ -175,15 +175,15 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
 
     // Optimistic UI update
     setRemindedEmployees(prev => new Set(prev).add(empName));
-    const toastId = toast.loading("Sender påminnelse...");
+    const toastId = toast.loading("Sender pÃƒÆ’Ã‚Â¥minnelse...");
 
     const { error } = await supabase
       .from('followup_requests')
       .insert({ employee_id: empId, status: 'pending' });
 
     if (error) {
-      console.error("Feil ved sending av påminnelse:", error);
-      toast.error("Kunne ikke sende påminnelse", { id: toastId });
+      console.error("Feil ved sending av pÃƒÆ’Ã‚Â¥minnelse:", error);
+      toast.error("Kunne ikke sende pÃƒÆ’Ã‚Â¥minnelse", { id: toastId });
       // Revert optimistic update
       setRemindedEmployees(prev => {
         const next = new Set(prev);
@@ -191,7 +191,7 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
         return next;
       });
     } else {
-      toast.success("Påminnelse sendt!", { id: toastId });
+      toast.success("PÃƒÆ’Ã‚Â¥minnelse sendt!", { id: toastId });
     }
   };
 
@@ -223,7 +223,7 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
 
   const isValidProjectNum = (pn: string) => /^[0-9]{3}$/.test(pn);
   const safeProjects = (projects || []).filter((p) => p.status !== "ferdig" && isValidProjectNum(p.project_number));
-  const datedProjects = safeProjects.filter((p) => p.start_date && p.estimated_end_date && p.assigned);
+  const datedProjects = safeProjects.filter((p) => p.start_date && p.estimated_end_date && (p.assigned_employees?.length ?? 0) > 0);
   const today = new Date().toISOString().split("T")[0];
 
   // --- Timeline range ---
@@ -287,7 +287,7 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
   const projectByNumber = new Map<string, Project>();
   for (const p of safeProjects) projectByNumber.set(p.project_number, p);
 
-  // Build grouped rows: employee → TimelineRow[]
+  // Build grouped rows: employee ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ TimelineRow[]
   const groupedRows: Record<string, TimelineRow[]> = {};
   const allEmployees = new Set<string>();
 
@@ -308,7 +308,7 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
       const project: Project = matchedProject || {
         project_number: entry.projectNumber,
         name: entry.projectName,
-        status: "pågår",
+        status: "pÃƒÆ’Ã‚Â¥gÃƒÆ’Ã‚Â¥r",
         start_date: entry.startDate,
         estimated_end_date: entry.endDate,
       };
@@ -324,19 +324,21 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
     }
   }
 
-  // Fallback: projects with assigned_to but no check-in data for that employee+project
+  // Fallback: projects with assigned_employees but no check-in data for that employee+project
   for (const p of datedProjects) {
-    if (!p.assigned || !EMPLOYEES.includes(p.assigned)) continue;
-    const key = `${p.assigned}|${p.project_number}`;
-    if (checkinCovered.has(key)) continue;
-    allEmployees.add(p.assigned);
-    if (!groupedRows[p.assigned]) groupedRows[p.assigned] = [];
-    groupedRows[p.assigned].push({
-      employee: p.assigned,
-      project: p,
-      y: 0,
-      fromCheckins: false,
-    });
+    for (const emp of (p.assigned_employees ?? [])) {
+      if (!EMPLOYEES.includes(emp)) continue;
+      const key = `${emp}|${p.project_number}`;
+      if (checkinCovered.has(key)) continue;
+      allEmployees.add(emp);
+      if (!groupedRows[emp]) groupedRows[emp] = [];
+      groupedRows[emp].push({
+        employee: emp,
+        project: p,
+        y: 0,
+        fromCheckins: false,
+      });
+    }
   }
 
   // Only show known field employees on the timeline
@@ -357,7 +359,7 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
   // Logic to determine if a project bar needs extension to today
   const getNeedsExtension = (row: TimelineRow): boolean => {
     const p = row.project;
-    if (p.status !== "pågår") return false;
+    if (p.status !== "pÃƒÆ’Ã‚Â¥gÃƒÆ’Ã‚Â¥r") return false;
     
     const empCheckin = checkins?.find((c) => c.employee === row.employee);
     const isMissingToday = !empCheckin || empCheckin.status !== "checked_in";
@@ -488,13 +490,13 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
           onClick={() => setZoom(15)}
           className={`px-3 py-1.5 text-xs font-semibold rounded-full min-h-[44px] cursor-pointer transition-colors ${zoom < 30 ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground hover:bg-secondary/80"}`}
         >
-          Måned
+          MÃƒÆ’Ã‚Â¥ned
         </button>
       </div>
 
       <div ref={containerRef} className="rounded-xl overflow-hidden border border-border bg-card">
         <div className="flex">
-          {/* ── Fixed left column ── */}
+          {/* ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Fixed left column ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ */}
           <div className="shrink-0 bg-card z-20" style={{ width: LEFT_COL, borderRight: "1px solid var(--border)" }}>
             {/* Header spacer */}
             <div className="flex items-end pb-2 pl-5 text-[11px] font-semibold uppercase text-muted-foreground/70 tracking-[0.04em]" style={{ height: HEADER_HEIGHT, borderBottom: "1px solid var(--border)" }}>
@@ -525,7 +527,7 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
                   <span className="text-[12px] font-semibold text-foreground">{h.label}</span>
                   {isMissingToday && (
                     <div 
-                      title={remindedEmployees.has(h.label) ? "Påminnelse sendt" : "Send påminnelse"} 
+                      title={remindedEmployees.has(h.label) ? "PÃƒÆ’Ã‚Â¥minnelse sendt" : "Send pÃƒÆ’Ã‚Â¥minnelse"} 
                       className={`flex items-center justify-center translate-y-[-0.5px] ${
                         remindedEmployees.has(h.label) 
                           ? "cursor-default opacity-80" 
@@ -534,7 +536,7 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
                       onClick={() => !remindedEmployees.has(h.label) && handleSendReminder(h.label)}
                     >
                       <span className="text-[13px]">
-                        {remindedEmployees.has(h.label) ? "✅" : "⚠️"}
+                        {remindedEmployees.has(h.label) ? "ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦" : "ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â"}
                       </span>
                     </div>
                   )}
@@ -556,7 +558,7 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
             </div>
           </div>
 
-          {/* ── Scrollable day grid ── */}
+          {/* ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Scrollable day grid ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ */}
           <div ref={scrollRef} className="flex-1 overflow-x-auto touch-pan-x" style={{ scrollBehavior: "smooth", touchAction: "pan-x" }}>
             <div style={{ width: gridWidth, position: "relative" }}>
               {/* Day header */}
@@ -675,7 +677,7 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
 
                   const isHovered = hoveredProject === p.project_number;
                   const bs = getBarStyle(p, today);
-                  const empColor = EMPLOYEE_COLORS[p.assigned || ""] || null;
+                  const empColor = EMPLOYEE_COLORS[p.assigned_employees?.[0] || ""] || null;
                   const isFallback = !row.fromCheckins;
 
                   return (
@@ -714,7 +716,7 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
                             className="flex shrink-0 items-center justify-center rounded-full text-[8px] font-bold text-white ml-1.5 z-10"
                             style={{ width: 16, height: 16, backgroundColor: empColor }}
                           >
-                            {(p.assigned || "?")[0]}
+                            {(p.assigned_employees?.[0] || "?")[0]}
                           </div>
                         )}
                       </div>
@@ -816,10 +818,14 @@ function HoverPopup({
           </span>
         </div>
 
-        {p.assigned && (
-          <div className="mb-3 flex items-center gap-2 text-[13px] text-muted-foreground">
-            <span className="rounded-full" style={{ width: 8, height: 8, backgroundColor: EMPLOYEE_COLORS[p.assigned] || "#888" }} />
-            <span className="font-medium">{p.assigned}</span>
+        {(p.assigned_employees?.length ?? 0) > 0 && (
+          <div className="mb-3 flex items-center gap-2 flex-wrap text-[13px] text-muted-foreground">
+            {p.assigned_employees!.map(emp => (
+              <span key={emp} className="flex items-center gap-1.5">
+                <span className="rounded-full" style={{ width: 8, height: 8, backgroundColor: EMPLOYEE_COLORS[emp] || "#888" }} />
+                <span className="font-medium">{emp}</span>
+              </span>
+            ))}
           </div>
         )}
 

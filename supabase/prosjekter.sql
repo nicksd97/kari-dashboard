@@ -49,3 +49,33 @@ UPDATE projects SET status = 'tilbud sendt'  WHERE status IN ('planlegging', 've
 UPDATE projects SET status = 'pågår'         WHERE status IN ('materialer', 'pagaende')             AND company_id = 'a12dfbf0-a9d6-4786-95fe-6f1678d9d980';
 UPDATE projects SET status = 'ferdig'        WHERE status = 'fakturering'                           AND company_id = 'a12dfbf0-a9d6-4786-95fe-6f1678d9d980';
 -- vunnet og tapt: settes manuelt
+
+-- ============================================================
+-- MIGRERING 2: Nye kolonner og assigned_employees
+-- Kjør dette i Supabase SQL Editor
+-- ============================================================
+
+-- 1. Status-migrasjon (kjør hvis ikke allerede gjort)
+UPDATE projects SET status = 'befart'        WHERE status = 'innkommende'                    AND company_id = 'a12dfbf0-a9d6-4786-95fe-6f1678d9d980';
+UPDATE projects SET status = 'tilbud sendt'  WHERE status IN ('planlegging', 'venter kunde') AND company_id = 'a12dfbf0-a9d6-4786-95fe-6f1678d9d980';
+UPDATE projects SET status = 'pågår'         WHERE status IN ('materialer', 'pagaende')      AND company_id = 'a12dfbf0-a9d6-4786-95fe-6f1678d9d980';
+UPDATE projects SET status = 'ferdig'        WHERE status = 'fakturering'                    AND company_id = 'a12dfbf0-a9d6-4786-95fe-6f1678d9d980';
+
+-- 2. Nye kolonner
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS customer_email    TEXT    DEFAULT '';
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS customer_phone    TEXT    DEFAULT '';
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS assigned_employees TEXT[] DEFAULT '{}';
+
+-- 3. Migrer eksisterende assigned-verdi inn i assigned_employees
+UPDATE projects
+SET assigned_employees = ARRAY[assigned]
+WHERE assigned IS NOT NULL
+  AND assigned != ''
+  AND (assigned_employees IS NULL OR cardinality(assigned_employees) = 0)
+  AND company_id = 'a12dfbf0-a9d6-4786-95fe-6f1678d9d980';
+
+-- 4. Verifisering
+SELECT project_number, assigned, assigned_employees, customer_email, customer_phone
+FROM projects
+WHERE company_id = 'a12dfbf0-a9d6-4786-95fe-6f1678d9d980'
+ORDER BY project_number::int;
