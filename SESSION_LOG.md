@@ -26,3 +26,5 @@
 - Seeded 21 real projects from prosjektoversikt.html into supabase/prosjekter.sql
 - Migrated from deprecated middleware.ts to proxy.ts (Next.js 16)
 - Installed @supabase/ssr; added supabase-server.ts and supabase-browser.ts SSR clients
+
+- **2026-07-01** — Fix: ProjectsList STATUS_FILTERS updated to new sales funnel statuses (pågår, befart, tilbud sendt, vunnet, tapt, ferdig); re-encoded file to UTF-8 after Windows-1252 corruption from PowerShell Set-Content
