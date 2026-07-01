@@ -1,11 +1,11 @@
-"use client";
+﻿"use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useGesture } from "@use-gesture/react";
 import { supabase } from "@/lib/supabase";
-import type { Project, Checklist, Checkin, TimelineEntry } from "@/lib/types";
+import type { Project, Checkin, TimelineEntry } from "@/lib/types";
 import {
   STATUS_COLORS_SOFT,
   STATUS_LABELS,
@@ -88,8 +88,8 @@ function getBarStyle(p: Project, today: string): BarStyle {
     return { bg: "#BDBDBD", border: "1px solid #A8A8A8" };
   }
   if (
-    p.status === "innkommende" ||
-    p.status === "planlegging" ||
+    p.status === "befart" ||
+    p.status === "tilbud sendt" ||
     (p.start_date && p.start_date > today)
   ) {
     return { bg: "var(--card)", border: "1px dashed #C0C0C0" };
@@ -102,7 +102,7 @@ function getBarStyle(p: Project, today: string): BarStyle {
     p.estimated_end_date &&
     daysBetween(today, p.estimated_end_date) <= 3 &&
     daysBetween(today, p.estimated_end_date) >= 0;
-  if (p.status === "venter kunde" || nearDeadline) {
+  if (p.status === "tilbud sendt" || nearDeadline) {
     return { bg: "#FF9800", border: "1px solid #E68900" };
   }
   return { bg: "#4CAF50", border: "1px solid #388E3C" };
@@ -121,49 +121,28 @@ const STAGE_ITEMS: Record<StageKey, string[]> = {
 };
 
 function getActiveStage(status: string): StageKey {
-  if (status === "innkommende" || status === "planlegging") return 1;
-  if (status === "materialer" || status === "pagaende" || status === "venter kunde") return 2;
+  if (status === "befart" || status === "tilbud sendt") return 1;
+  if (status === "vunnet" || status === "pågår") return 2;
   return 3;
 }
 
-function getStageState(stageKey: StageKey, activeStage: StageKey, allChecklistsPassed: boolean, isFerdig: boolean): "completed" | "active" | "future" {
-  if (isFerdig && allChecklistsPassed) return "completed";
+function getStageState(stageKey: StageKey, activeStage: StageKey, isFerdig: boolean): "completed" | "active" | "future" {
+  if (isFerdig) return "completed";
   if (stageKey < activeStage) return "completed";
   if (stageKey === activeStage) return "active";
   return "future";
 }
 
-function isItemComplete(stageKey: StageKey, itemIndex: number, activeStage: StageKey, checklists: Checklist[] | undefined, isFerdig: boolean, allChecklistsPassed: boolean): boolean {
-  if (isFerdig && allChecklistsPassed) return true;
+function isItemComplete(stageKey: StageKey, itemIndex: number, activeStage: StageKey, isFerdig: boolean): boolean {
+  if (isFerdig) return true;
   if (stageKey < activeStage) return true;
   if (stageKey > activeStage) return false;
-  const cls = checklists || [];
-  if (stageKey === 2) {
-    const item = STAGE_ITEMS[2][itemIndex];
-    if (item === "Vernerunde gjennomført") { const v = cls.find((c) => c.name.toLowerCase().includes("vernerunde")); return v ? v.done === v.total : false; }
-    if (item === "Kvalitetskontroll underveis") { const q = cls.find((c) => c.name.toLowerCase().includes("kvalitetskontroll")); return q ? q.done === q.total : false; }
-  }
   if (stageKey === 3) {
     const item = STAGE_ITEMS[3][itemIndex];
-    if (item === "Kvalitetskontroll ferdig") { const q = cls.find((c) => c.name.toLowerCase().includes("kvalitetskontroll")); return q ? q.done === q.total : false; }
-    if (item === "Ferdigstillelse-sjekkliste") { const f = cls.find((c) => c.name.toLowerCase().includes("ferdigstillelse")); return f ? f.done === f.total : false; }
     if (item === "Sluttfaktura sendt") return isFerdig || activeStage === 3;
     if (item === "Prosjekt lukket i Planner") return isFerdig;
   }
   return false;
-}
-
-function getChecklistForItem(stageKey: StageKey, itemIndex: number, checklists: Checklist[] | undefined): Checklist | null {
-  const cls = checklists || [];
-  if (stageKey === 2) {
-    if (itemIndex === 0) return cls.find((c) => c.name.toLowerCase().includes("vernerunde")) || null;
-    if (itemIndex === 2) return cls.find((c) => c.name.toLowerCase().includes("kvalitetskontroll")) || null;
-  }
-  if (stageKey === 3) {
-    if (itemIndex === 0) return cls.find((c) => c.name.toLowerCase().includes("kvalitetskontroll")) || null;
-    if (itemIndex === 1) return cls.find((c) => c.name.toLowerCase().includes("ferdigstillelse")) || null;
-  }
-  return null;
 }
 
 // --- Main component ---
@@ -329,7 +308,7 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
       const project: Project = matchedProject || {
         project_number: entry.projectNumber,
         name: entry.projectName,
-        status: "pagaende",
+        status: "pågår",
         start_date: entry.startDate,
         estimated_end_date: entry.endDate,
       };
@@ -378,7 +357,7 @@ export default function Timeline({ projects, checkins, timelineEntries }: Timeli
   // Logic to determine if a project bar needs extension to today
   const getNeedsExtension = (row: TimelineRow): boolean => {
     const p = row.project;
-    if (p.status !== "pagaende") return false;
+    if (p.status !== "pågår") return false;
     
     const empCheckin = checkins?.find((c) => c.employee === row.employee);
     const isMissingToday = !empCheckin || empCheckin.status !== "checked_in";
@@ -816,9 +795,6 @@ function HoverPopup({
     p.start_date && p.estimated_end_date ? Math.max(1, daysBetween(p.start_date, p.estimated_end_date)) : null;
 
   const isFerdig = p.status === "ferdig";
-  const allChecklistsPassed =
-    !!p.checklists && p.checklists.length > 0 && p.checklists.every((c) => c.done === c.total);
-  const showWarning = isFerdig && p.checklists && p.checklists.length > 0 && !allChecklistsPassed;
 
   const stages: StageKey[] = [1, 2, 3];
 
@@ -866,7 +842,7 @@ function HoverPopup({
       <div className="px-5 pt-4 pb-3 border-t border-border">
         <div className="flex items-center mb-4">
           {stages.map((s, i) => {
-            const state = getStageState(s, activeStage, allChecklistsPassed, isFerdig);
+            const state = getStageState(s, activeStage, isFerdig);
             const isViewing = viewingStage === s;
             let bg: string, borderCol: string, text: string;
             if (state === "completed") { bg = "#22c55e"; borderCol = "#22c55e"; text = "#fff"; }
@@ -893,8 +869,7 @@ function HoverPopup({
         <div className="mb-1">
           <p className="text-[10px] font-semibold uppercase mb-1.5 text-muted-foreground/70 tracking-[0.04em]">{viewingStage}. {STAGE_LABELS[viewingStage]}</p>
           {STAGE_ITEMS[viewingStage].map((item, idx) => {
-            const done = isItemComplete(viewingStage, idx, activeStage, p.checklists, isFerdig, allChecklistsPassed);
-            const linked = getChecklistForItem(viewingStage, idx, p.checklists);
+            const done = isItemComplete(viewingStage, idx, activeStage, isFerdig);
             return (
               <div key={item} className="flex items-center gap-2 h-6">
                 {done ? (
@@ -903,18 +878,11 @@ function HoverPopup({
                   <svg width="14" height="14" viewBox="0 0 14 14" className="shrink-0"><circle cx="7" cy="7" r="5.5" fill="none" stroke="var(--border)" strokeWidth="1" /></svg>
                 )}
                 <span className={`text-[12px] ${done ? "text-muted-foreground/70 line-through" : "text-foreground"}`}>{item}</span>
-                {linked && <span className="ml-auto text-[10px] text-muted-foreground/70">{linked.done}/{linked.total}</span>}
               </div>
             );
           })}
         </div>
       </div>
-
-      {showWarning && (
-        <div className="mx-5 mb-4 rounded-lg px-3 py-2 text-[11px] font-medium" style={{ backgroundColor: "#FEF3C7", color: "#92400E" }}>
-          Sjekklister m&aring; godkjennes f&oslash;r prosjektet kan lukkes
-        </div>
-      )}
       <div className="h-1" />
     </div>
   );

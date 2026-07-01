@@ -5,8 +5,6 @@ import {
   fetchLiveProjects,
   fetchLiveLeads,
   fetchLiveCheckins,
-  fetchLiveChecklistEntries,
-  fetchLiveScores,
   fetchLiveDeviations,
   fetchTimelineData,
   fetchLiveMessageFeed,
@@ -15,12 +13,10 @@ import Dashboard from "./components/Dashboard";
 import { Skeleton } from "@/components/ui/skeleton";
 
 async function DashboardData() {
-  const [projects, leads, checkins, checklistEntries, scores, deviations, timelineEntries, messageFeed] = await Promise.all([
+  const [projects, leads, checkins, deviations, timelineEntries, messageFeed] = await Promise.all([
     fetchLiveProjects(),
     fetchLiveLeads(),
     fetchLiveCheckins(),
-    fetchLiveChecklistEntries(),
-    fetchLiveScores(),
     fetchLiveDeviations(),
     fetchTimelineData(),
     fetchLiveMessageFeed(),
@@ -31,8 +27,6 @@ async function DashboardData() {
       initialProjects={projects}
       initialLeads={leads}
       initialCheckins={checkins}
-      initialChecklistEntries={checklistEntries}
-      initialScores={scores}
       initialDeviations={deviations}
       initialTimelineEntries={timelineEntries}
       initialMessageFeed={messageFeed}

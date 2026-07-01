@@ -1,11 +1,4 @@
-﻿export interface Checklist {
-  name: string;
-  done: number;
-  total: number;
-  date?: string;
-}
-
-export interface Project {
+﻿export interface Project {
   project_number: string;
   name: string;
   status: string;
@@ -17,7 +10,6 @@ export interface Project {
   agreed_price?: number;
   assigned?: string;
   dependency?: string;
-  checklists?: Checklist[];
 }
 
 export interface Checkin {
@@ -32,17 +24,6 @@ export interface Checkin {
   estimatedCompletion?: string;
 }
 
-export interface ChecklistEntry {
-  template: string;
-  project_number: string;
-  project_name: string;
-  status: "overdue" | "pending" | "completed";
-  done?: number;
-  total?: number;
-  sent_at: string;
-  completed_at?: string;
-}
-
 export interface Lead {
   name: string;
   email: string;
@@ -54,51 +35,32 @@ export interface Lead {
   address: string;
 }
 
-export interface EmployeeScore {
-  employee: string;
-  checkinCount: number;
-  missedCheckins: number;
-  checklistOnTime: number;
-  checklistLate: number;
-  missedChecklists: number;
-  deviationsReported: number;
-  deviationsResponsible: number;
-  deviationsResolved: number;
-  deviationReporterPts: number;
-  deviationResponsiblePts: number;
-  deviationResolutionPts: number;
-  total: number;
-}
-
 // Slightly more saturated bar colors
 export const STATUS_COLORS: Record<string, string> = {
-  innkommende: "#9CC8F0",
-  planlegging: "#B8B4F0",
-  materialer: "#F5B84D",
-  pagaende: "#6DD4B1",
-  "venter kunde": "#F0A893",
-  fakturering: "#EEA4BC",
+  befart: "#9CC8F0",
+  "tilbud sendt": "#B8B4F0",
+  vunnet: "#6DD4B1",
+  tapt: "#F0A893",
+  "pågår": "#F5B84D",
   ferdig: "#A8D175",
 };
 
 // Softer badge/card colors
 export const STATUS_COLORS_SOFT: Record<string, string> = {
-  innkommende: "#B5D4F4",
-  planlegging: "#CECBF6",
-  materialer: "#FAC775",
-  pagaende: "#9FE1CB",
-  "venter kunde": "#F5C4B3",
-  fakturering: "#F4C0D1",
+  befart: "#B5D4F4",
+  "tilbud sendt": "#CECBF6",
+  vunnet: "#9FE1CB",
+  tapt: "#F5C4B3",
+  "pågår": "#FAC775",
   ferdig: "#C0DD97",
 };
 
 export const STATUS_LABELS: Record<string, string> = {
-  innkommende: "Innkommende",
-  planlegging: "Planlegging",
-  materialer: "Materialer",
-  pagaende: "Pågående",
-  "venter kunde": "Venter kunde",
-  fakturering: "Fakturering",
+  befart: "Befart",
+  "tilbud sendt": "Tilbud sendt",
+  vunnet: "Vunnet",
+  tapt: "Tapt",
+  "pågår": "Pågår",
   ferdig: "Ferdig",
 };
 
@@ -148,7 +110,7 @@ export interface TimelineEntry {
 
 export interface MessageFeedEntry {
   id: string;
-  type: "checkin" | "deviation" | "checklist" | "message";
+  type: "checkin" | "deviation" | "message";
   timestamp: string;
   employee_name: string;
   project_number?: string;

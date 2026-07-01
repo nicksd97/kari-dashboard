@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { MessageFeedEntry } from "@/lib/types";
 import { EMPLOYEE_COLORS } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
-import { CheckCircle2, AlertTriangle, ClipboardCheck, Clock, MessageSquare } from "lucide-react";
+import { CheckCircle2, AlertTriangle, Clock, MessageSquare } from "lucide-react";
 
 interface MessageFeedProps {
   messages: MessageFeedEntry[];
@@ -52,8 +52,6 @@ export default function MessageFeed({ messages }: MessageFeedProps) {
         return <CheckCircle2 className="w-5 h-5 text-green-500" />;
       case "deviation":
         return <AlertTriangle className="w-5 h-5 text-red-500" />;
-      case "checklist":
-        return <ClipboardCheck className="w-5 h-5 text-blue-500" />;
       case "message":
         return <MessageSquare className="w-5 h-5 text-purple-500" />;
       default:

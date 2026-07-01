@@ -22,7 +22,7 @@ Next.js 16 (App Router) + React 19 + TypeScript
 **Data flow:** `page.tsx` fetches server-side → passes props to `<Dashboard>` → child components render. Client-side toggle switches between live Supabase data and hardcoded demo data.
 
 **Key integrations:**
-- Supabase: projects, leads, checklists, deviations, checkins, employees, scores
+- Supabase: projects, leads, checklists, deviations, checkins, employees
 - Microsoft Graph: OneDrive folder browsing, file preview/download per project
 - DnD Kit: drag-drop lead pipeline (updates Supabase on drop)
 - pdfjs-dist: client-side PDF rendering in project detail view
@@ -34,13 +34,13 @@ Next.js 16 (App Router) + React 19 + TypeScript
 3. **Norwegian throughout** — all UI text, date formatting (nb-NO), status labels are in Norwegian.
 4. **Server/client split** — pages fetch data server-side; components are "use client" for interactivity.
 5. **OneDrive via proxy** — API routes in `/api/graph/` proxy Microsoft Graph calls to keep credentials server-side.
-6. **Employee-centric views** — timeline groups by employee, leaderboard scores monthly performance, sidebar shows check-in status per person.
-7. **Scoring system** — monthly points: check-ins (+5), checklists (+10 on-time), deviations (variable), penalties for misses. Top scorer gets crown + confetti.
+6. **Employee-centric views** — timeline groups by employee.
+7. **Clean Dashboard** — main dashboard is a clean panel focusing on projects, leads, and messages, matching the design of the Prosjekter view.
 
 ## Current State
 
-- **Core features working:** Dashboard with timeline/leads tabs, sidebar (team, checklists, leaderboard), project detail with OneDrive/checklists/deviations, command palette search (Cmd+K), Avvik (deviations) section on dashboard front page
-- **Recent work:** UI overhaul (sidebar, timeline, lead pipeline, project detail refactor), scoring overhaul, deviation points, scoreboard interactions, SheetTrigger fixes
+- **Core features working:** Dashboard with timeline/leads/messages tabs, project detail with OneDrive/checklists/deviations, command palette search (Cmd+K), Avvik (deviations) section on dashboard front page
+- **Recent work:** Removed TEAM sidebar, checklists, and scoring from the main dashboard to match the clean design of ProsjekterView.
 - **Working tree:** Clean, all changes committed on `main`
 - **Employees in system:** Roar Aursøy, Andrii Perepelytsia, Marci Marschall, Nick Davidson, Roger Samdal
 - **Lead pipeline stages:** Ny → Kontaktet → Befaring → Oppfølging → Kvalifisert → Konvertert → Tapt

@@ -2,24 +2,20 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import type { Project, Lead, Checkin, ChecklistEntry, EmployeeScore, Deviation, TimelineEntry, MessageFeedEntry } from "@/lib/types";
+import type { Project, Lead, Checkin, Deviation, TimelineEntry, MessageFeedEntry } from "@/lib/types";
 import {
   fetchLiveProjects,
   fetchLiveLeads,
   fetchLiveCheckins,
-  fetchLiveChecklistEntries,
-  fetchLiveScores,
   fetchLiveDeviations,
   fetchLiveMessageFeed,
   getDemoData,
-  getDemoScores,
 } from "@/lib/data";
 import StatCards from "./StatCards";
 import Timeline from "./Timeline";
 import LeadPipeline from "./LeadPipeline";
 import ProjectsList from "./ProjectsList";
 import DeviationsList from "./DeviationsList";
-import Sidebar from "./Sidebar";
 import MessageFeed from "./MessageFeed";
 import {
   CommandDialog,
@@ -37,8 +33,6 @@ interface DashboardProps {
   initialProjects: Project[];
   initialLeads: Lead[];
   initialCheckins: Checkin[];
-  initialChecklistEntries: ChecklistEntry[];
-  initialScores: EmployeeScore[];
   initialDeviations: Deviation[];
   initialTimelineEntries: TimelineEntry[];
   initialMessageFeed: MessageFeedEntry[];
@@ -48,8 +42,6 @@ export default function Dashboard({
   initialProjects,
   initialLeads,
   initialCheckins,
-  initialChecklistEntries,
-  initialScores,
   initialDeviations,
   initialTimelineEntries,
   initialMessageFeed,
@@ -58,8 +50,6 @@ export default function Dashboard({
   const [projects, setProjects] = useState<Project[]>(initialProjects);
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [checkins, setCheckins] = useState<Checkin[]>(initialCheckins);
-  const [checklistEntries, setChecklistEntries] = useState<ChecklistEntry[]>(initialChecklistEntries);
-  const [scores, setScores] = useState<EmployeeScore[]>(initialScores);
   const [deviations, setDeviations] = useState<Deviation[]>(initialDeviations);
   const [timelineEntries] = useState<TimelineEntry[]>(initialTimelineEntries);
   const [messageFeed, setMessageFeed] = useState<MessageFeedEntry[]>(initialMessageFeed);
@@ -83,27 +73,21 @@ export default function Dashboard({
 
   const loadLive = useCallback(async () => {
     try {
-      const [liveProjects, liveLeads, liveCheckins, liveCl, liveScores, liveDev, liveMsgs] = await Promise.all([
+      const [liveProjects, liveLeads, liveCheckins, liveDev, liveMsgs] = await Promise.all([
         fetchLiveProjects().catch(() => []),
         fetchLiveLeads().catch(() => []),
         fetchLiveCheckins().catch(() => []),
-        fetchLiveChecklistEntries().catch(() => []),
-        fetchLiveScores().catch(() => []),
         fetchLiveDeviations().catch(() => []),
         fetchLiveMessageFeed().catch(() => []),
       ]);
       const p = Array.isArray(liveProjects) ? liveProjects : [];
       const l = Array.isArray(liveLeads) ? liveLeads : [];
       const ci = Array.isArray(liveCheckins) ? liveCheckins : [];
-      const cl = Array.isArray(liveCl) ? liveCl : [];
-      const sc = Array.isArray(liveScores) ? liveScores : [];
       const dv = Array.isArray(liveDev) ? liveDev : [];
       const msgs = Array.isArray(liveMsgs) ? liveMsgs : [];
       setProjects(p);
       setLeads(l);
       setCheckins(ci);
-      setChecklistEntries(cl);
-      setScores(sc);
       setDeviations(dv);
       setMessageFeed(msgs);
       return p.length > 0 || l.length > 0;
@@ -111,8 +95,6 @@ export default function Dashboard({
       setProjects([]);
       setLeads([]);
       setCheckins([]);
-      setChecklistEntries([]);
-      setScores([]);
       setDeviations([]);
       setMessageFeed([]);
       return false;
@@ -124,8 +106,6 @@ export default function Dashboard({
     setProjects(demo.projects);
     setLeads(demo.leads);
     setCheckins(demo.checkins);
-    setChecklistEntries(demo.checklistEntries);
-    setScores(getDemoScores());
     setDeviations(demo.deviations);
     setMessageFeed(demo.messageFeed || []);
   }, []);
@@ -165,25 +145,26 @@ export default function Dashboard({
   const isLive = source === "live";
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar checkins={checkins} checklistEntries={checklistEntries} scores={scores} />
-
+    <div style={{ background: '#f2f0ea', minHeight: '100vh' }}>
+      <style>{`
+        .p-card { background:#fff; border:1px solid #e7e4db; border-radius:12px; box-shadow:0 1px 2px rgba(20,25,24,.06),0 8px 24px rgba(20,25,24,.06); }
+        .p-tab { font-size:13px; font-weight:600; color:#4a534f; border:0; background:transparent; padding:7px 15px; border-radius:7px; cursor:pointer; }
+        .p-tab.on { background:#1f4b4a; color:#fff; }
+      `}</style>
       <main className="flex-1 min-w-0 flex flex-col pb-16 lg:pb-0">
-        <div className="mx-auto w-full max-w-[1200px] flex-1 flex flex-col px-4 py-8 sm:px-6 lg:px-10">
+        <div style={{ maxWidth: 1280, margin: '0 auto', padding: '22px 20px 60px' }} className="w-full flex-1 flex flex-col">
           {/* Header */}
-          <div className="mb-8">
-            <div className="flex items-end gap-4 flex-wrap">
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', marginBottom: 18 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
+              <div style={{ width: 42, height: 42, borderRadius: 10, background: '#1f4b4a', color: '#f2f0ea', display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: 18 }}>RS</div>
               <div>
-                <p className="text-[13px] font-medium tracking-[0.05em] uppercase text-muted-foreground/70">
-                  R. Samdal Snekkeri
-                </p>
-                <h1 className="mt-1 text-[24px] sm:text-[28px] font-bold leading-tight text-foreground">
-                  Prosjektoversikt
-                </h1>
+                <h1 style={{ fontWeight: 700, fontSize: 20, margin: 0, letterSpacing: '-.2px', color: '#191d1c' }}>Prosjektoversikt</h1>
+                <p style={{ margin: '1px 0 0', color: '#4a534f', fontSize: 12.5 }}>R. Samdal Snekkeri · Kontraktsfestede jobber &amp; fremdrift</p>
               </div>
+            </div>
 
-              {/* Data source toggle & Search */}
-              <div className="mb-1 ml-auto flex items-center gap-2">
+            {/* Data source toggle & Search */}
+            <div className="mb-1 ml-auto flex items-center gap-2">
                 <button
                   onClick={() => setSearchOpen(true)}
                   className="flex items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] sm:text-[12px] font-semibold transition-colors min-h-[32px] cursor-pointer bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border"
@@ -240,7 +221,6 @@ export default function Dashboard({
                 )}
               </div>
             </div>
-          </div>
 
           {/* Stat cards */}
           <div className="mb-8">
@@ -248,36 +228,24 @@ export default function Dashboard({
           </div>
 
           {/* Tab bar */}
-          <div className="mb-6 flex gap-6 border-b border-border">
+          <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
             <button
               onClick={() => setTab("timeline")}
-              className={`relative pb-3 text-[14px] font-medium transition-colors min-h-[44px] cursor-pointer ${tab === "timeline" ? "text-foreground" : "text-muted-foreground/70"}`}
-              style={{ letterSpacing: "0.01em" }}
+              className={`p-tab ${tab === "timeline" ? "on" : ""}`}
             >
               Prosjekt-tidslinje
-              {tab === "timeline" && (
-                <span className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-foreground" />
-              )}
             </button>
             <button
               onClick={() => setTab("leads")}
-              className={`relative pb-3 text-[14px] font-medium transition-colors min-h-[44px] cursor-pointer ${tab === "leads" ? "text-foreground" : "text-muted-foreground/70"}`}
-              style={{ letterSpacing: "0.01em" }}
+              className={`p-tab ${tab === "leads" ? "on" : ""}`}
             >
               Lead-pipeline
-              {tab === "leads" && (
-                <span className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-foreground" />
-              )}
             </button>
             <button
               onClick={() => setTab("messages")}
-              className={`relative pb-3 text-[14px] font-medium transition-colors min-h-[44px] cursor-pointer ${tab === "messages" ? "text-foreground" : "text-muted-foreground/70"}`}
-              style={{ letterSpacing: "0.01em" }}
+              className={`p-tab ${tab === "messages" ? "on" : ""}`}
             >
               Meldinger
-              {tab === "messages" && (
-                <span className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-foreground" />
-              )}
             </button>
           </div>
 
@@ -350,27 +318,6 @@ export default function Dashboard({
                   <div className="flex items-center gap-2 w-full">
                     <span className="font-medium flex-1">{l.name}</span>
                     <span className="text-[11px] text-muted-foreground/70">{l.source}</span>
-                  </div>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          )}
-
-          {scores.length > 0 && (
-            <CommandGroup heading="Ansatte">
-              {scores.map((s) => (
-                <CommandItem
-                  key={s.employee}
-                  value={s.employee}
-                  onSelect={() => {
-                    setSearchOpen(false);
-                    // Just close search, maybe we can add a specific action later
-                  }}
-                  className="cursor-pointer"
-                >
-                  <div className="flex items-center gap-2 w-full">
-                    <span className="font-medium flex-1">{s.employee}</span>
-                    <span className="text-[11px] text-muted-foreground/70">{s.total} poeng denne måneden</span>
                   </div>
                 </CommandItem>
               ))}
