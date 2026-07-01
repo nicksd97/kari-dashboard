@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+﻿import { supabase } from "./supabase";
 import type { Project, Lead, Checkin, ChecklistEntry, EmployeeScore, Deviation, TimelineEntry, MessageFeedEntry } from "./types";
 
 const COMPANY_ID = "a12dfbf0-a9d6-4786-95fe-6f1678d9d980";
@@ -48,6 +48,7 @@ export async function fetchProjects(): Promise<{ projects: Project[]; isLive: bo
           name: String(p.name || ""),
           status: String(p.status || ""),
           customer_name: p.customer_name ? String(p.customer_name) : undefined,
+          address: p.address ? String(p.address) : undefined,
           start_date: p.start_date ? String(p.start_date) : undefined,
           estimated_end_date: p.estimated_end_date ? String(p.estimated_end_date) : (p.start_date ? String(p.start_date) : undefined),
           end_date_defaulted: !p.estimated_end_date && !!p.start_date,
@@ -251,6 +252,7 @@ export async function fetchLiveProjects(): Promise<Project[]> {
           name: String(p.name || ""),
           status: String(p.status || ""),
           customer_name: p.customer_name ? String(p.customer_name) : undefined,
+          address: p.address ? String(p.address) : undefined,
           start_date: startDate,
           estimated_end_date: endDate,
           end_date_defaulted: !p.estimated_end_date && !ciDates && !!p.start_date,
