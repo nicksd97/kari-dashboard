@@ -86,3 +86,65 @@ ORDER BY project_number::int;
 -- ============================================================
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS archived BOOLEAN DEFAULT false;
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS notes    TEXT    DEFAULT '';
+
+-- ============================================================
+-- MIGRERING 4: Fix constraint, ekte kolonner, rydd description
+-- Kjør dette i Supabase SQL Editor
+-- ============================================================
+
+-- 1. Fjern gammel status-constraint så vi kan migrere verdier
+ALTER TABLE projects DROP CONSTRAINT IF EXISTS projects_status_check;
+
+-- 2. Migrer gamle statusverdier til nye FØR vi setter ny constraint
+UPDATE projects SET status = 'befart'       WHERE status = 'innkommende'                    AND company_id = 'a12dfbf0-a9d6-4786-95fe-6f1678d9d980';
+UPDATE projects SET status = 'tilbud sendt' WHERE status IN ('planlegging','venter kunde')  AND company_id = 'a12dfbf0-a9d6-4786-95fe-6f1678d9d980';
+UPDATE projects SET status = 'pågår'        WHERE status IN ('materialer','pagaende')       AND company_id = 'a12dfbf0-a9d6-4786-95fe-6f1678d9d980';
+UPDATE projects SET status = 'ferdig'       WHERE status = 'fakturering'                    AND company_id = 'a12dfbf0-a9d6-4786-95fe-6f1678d9d980';
+
+-- 3. Sett ny constraint med riktige verdier
+ALTER TABLE projects ADD CONSTRAINT projects_status_check
+  CHECK (status IN ('befart','tilbud sendt','vunnet','tapt','pågår','ferdig'));
+
+-- 4. Legg til ekte kolonner (trygge å kjøre flere ganger)
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS notes             TEXT    DEFAULT '';
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS archived          BOOLEAN DEFAULT false;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS assigned_employees TEXT[] DEFAULT '{}';
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS customer_email    TEXT    DEFAULT '';
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS customer_phone    TEXT    DEFAULT '';
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS address           TEXT    DEFAULT '';
+
+-- 5. Rydd description: flytt JSON-søppel til ekte kolonner, null ut JSON-en
+--    (Gemini lagret notes/archived som JSON i description-feltet)
+UPDATE projects
+SET
+  notes = CASE
+    WHEN description IS NOT NULL AND description LIKE '{%'
+    THEN COALESCE(NULLIF((description::jsonb ->> 'notes'), ''), notes, '')
+    ELSE COALESCE(notes, '')
+  END,
+  archived = CASE
+    WHEN description IS NOT NULL AND description LIKE '{%'
+    THEN COALESCE((description::jsonb ->> 'archived')::boolean, archived, false)
+    ELSE COALESCE(archived, false)
+  END,
+  description = CASE
+    WHEN description IS NOT NULL AND description LIKE '{%' THEN NULL
+    ELSE description
+  END
+WHERE company_id = 'a12dfbf0-a9d6-4786-95fe-6f1678d9d980';
+
+-- 6. Migrer assigned (enkeltstreng) → assigned_employees (array) der det mangler
+UPDATE projects
+SET assigned_employees = ARRAY[assigned]
+WHERE assigned IS NOT NULL
+  AND assigned != ''
+  AND (assigned_employees IS NULL OR cardinality(assigned_employees) = 0)
+  AND company_id = 'a12dfbf0-a9d6-4786-95fe-6f1678d9d980';
+
+-- 7. Verifisering: sjekk at alt ser riktig ut
+SELECT project_number, status, assigned, assigned_employees,
+       notes, archived, description
+FROM projects
+WHERE company_id = 'a12dfbf0-a9d6-4786-95fe-6f1678d9d980'
+ORDER BY project_number::int
+LIMIT 30;
